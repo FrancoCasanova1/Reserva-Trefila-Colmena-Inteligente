@@ -1,0 +1,79 @@
+.hiveCard {
+  /* La magia del hexágono: clip-path */
+  clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
+  
+  /* Estilo base */
+  background: linear-gradient(145deg, #f0e68c, #ffd700); /* Fondo color miel/oro */
+  border: 3px solid #b8860b; /* Borde oscuro */
+  color: #333;
+  
+  /* Tamaño y padding */
+  width: 300px;
+  height: 346px; /* Altura ajustada para mantener la proporción hexagonal */
+  margin: 20px;
+  padding: 30px 40px; 
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  text-align: center;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+  transition: transform 0.3s, box-shadow 0.3s;
+  cursor: pointer; /* Indica que es clickeable */
+}
+
+/* Efecto hover (al pasar el mouse) */
+.hiveCard:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.3);
+}
+
+/* Estilos de contenido */
+.hiveName {
+  font-size: 1.8em;
+  font-weight: bold;
+  color: #8b4513; /* Marrón oscuro */
+  margin-bottom: 5px;
+}
+
+.lastUpdate {
+  font-size: 0.9em;
+  font-style: italic;
+  margin-bottom: 20px;
+}
+
+.dataGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr; /* Dos columnas */
+  gap: 15px;
+}
+
+.dataItem {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  background-color: rgba(255, 255, 255, 0.7);
+  padding: 8px 0;
+  border-radius: 5px;
+}
+
+.icon {
+  font-size: 1.5em;
+}
+
+.value {
+  font-size: 1.1em;
+  font-weight: 600;
+  margin-top: 5px;
+  color: #333;
+}
+
+.detailsButton {
+    display: block;
+    margin-top: 20px;
+    padding: 5px 10px;
+    background-color: #8b4513;
+    color: white;
+    border-radius: 5px;
+    font-weight: bold;
+    text-decoration: none;
+}
