@@ -1,46 +1,51 @@
 // /frontend/pages/api/weather.js
 
 export default async function handler(req, res) {
-  // Intentar obtener la clave de las variables de entorno de Render
-  const apiKey = process.env.CLIMA_API_KEY; 
-  const city = req.query.city || 'Campana,AR'; 
+    // La clave ahora se usa para WeatherAPI.com
+    const API_KEY = process.env.CLIMA_API_KEY; 
+    
+    // Usaremos la ciudad de Campana y pediremos 7 días de pronóstico.
+    const city = req.query.city || 'Campana, Buenos Aires, AR'; 
+    const days = 7; 
 
-  // --- COMPROBACIÓN CRÍTICA ---
-  if (!apiKey || apiKey === '78bb833c2b996c4c4d5918990f711c17') {
-    // Si la clave es nula O si todavía es la clave de ejemplo que te di, devolvemos 500
-    console.error("ERROR: CLIMA_API_KEY no se cargó o no se reemplazó.");
-    // Devolvemos 500 y un mensaje útil para el log de Render
-    return res.status(500).json({ error: 'Configuración fallida: CLIMA_API_KEY no encontrada o no válida en Render.' });
-  }
-
-  // Paso 1: Obtener Latitud y Longitud (Geocoding API)
-  const geoUrl = `http://api.openweathermap.org/geo/1.0/direct?q=${city}&limit=1&appid=${apiKey}`;
-  
-  try {
-    const geoResponse = await fetch(geoUrl);
-    const geoData = await geoResponse.json();
-
-    if (geoData.length === 0) {
-      return res.status(404).json({ error: 'Ubicación no encontrada.' });
+    if (!API_KEY) {
+        console.error("ERROR: CLIMA_API_KEY no se cargó o no se reemplazó.");
+        // Devolver un error 500 para indicar que el backend falló.
+        return res.status(500).json({ error: 'La clave API del clima no está configurada en el servidor.' });
     }
 
-    const { lat, lon } = geoData[0];
-    
-    // Paso 2: Obtener Pronóstico de 5 días (One Call API)
-    const weatherUrl = `https://api.openweathermap.org/data/2.5/onecall?lat=${lat}&lon=${lon}&exclude=current,minutely,hourly,alerts&units=metric&lang=es&appid=${apiKey}`;
-    
-    const weatherResponse = await fetch(weatherUrl);
-    // ¡CRÍTICO! Revisar si la respuesta de OpenWeatherMap fue un error (ej. 401 por clave no activa)
-    if (!weatherResponse.ok) {
-        console.error("OpenWeatherMap API Response Error:", weatherResponse.status, await weatherResponse.text());
-        return res.status(weatherResponse.status).json({ error: 'Fallo de la API de OpenWeatherMap.' });
-    }
-    
-    const weatherData = await weatherResponse.json();
-    res.status(200).json(weatherData);
+    // Endpoint de WeatherAPI para el pronóstico
+    const apiUrl = `http://api.weatherapi.com/v1/forecast.json?key=${API_KEY}&q=${city}&days=${days}&lang=es`;
 
-  } catch (error) {
-    console.error("Error general al obtener clima:", error);
-    res.status(500).json({ error: 'Fallo al procesar la solicitud del clima (error de red o interno).' });
-  }
+    try {
+        const apiResponse = await fetch(apiUrl);
+
+        if (!apiResponse.ok) {
+            // Si WeatherAPI devuelve un error (ej. clave inválida, ciudad no encontrada)
+            const errorData = await apiResponse.json();
+            console.error('Error de WeatherAPI:', errorData);
+            return res.status(apiResponse.status).json({ error: 'Fallo al obtener datos del clima: ' + errorData.error.message });
+        }
+
+        const data = await apiResponse.json();
+
+        // Mapear los datos de WeatherAPI al formato simple que espera tu frontend
+        const mappedForecast = data.forecast.forecastday.map(day => ({
+            date: day.date,
+            condition: day.day.condition.text,
+            icon: `https:${day.day.condition.icon}`, // WeatherAPI requiere HTTPS:
+            temp_max: day.day.maxtemp_c,
+            temp_min: day.day.mintemp_c,
+        }));
+
+        res.status(200).json({
+            city: data.location.name,
+            country: data.location.country,
+            forecast: mappedForecast,
+        });
+
+    } catch (error) {
+        console.error('Error interno al procesar la solicitud del clima:', error);
+        res.status(500).json({ error: 'Error interno del servidor al procesar la API.' });
+    }
 }
