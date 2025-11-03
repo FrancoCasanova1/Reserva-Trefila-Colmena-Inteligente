@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/router'; // Si usas Next.js
-import { getHiveHistory } from '../utils/data-service'; // Ajusta la ruta
+import { getHiveHistory } from '../../utils/data-service'; // RUTA CORRECTA
 
 // Importaciones de Recharts (necesitas instalarlos: npm install recharts)
 import { 
