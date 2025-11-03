@@ -4,12 +4,8 @@ import { useSupabaseClient } from '@supabase/auth-helpers-react';
 import HiveCard from '../components/Hive/HiveCard'; 
 import WeatherBar from '../components/Layout/WeatherBar';
 
-// NOTA: El componente WeatherBar podría seguir fallando con 500 si la clave de OpenWeatherMap no está activa.
-// El resto del código de Supabase funcionará sin problemas.
-
 export default function HomePage() {
   const supabase = useSupabaseClient();
-  // Cambiamos el estado para almacenar objetos de colmena, no solo strings de ID
   const [hives, setHives] = useState([]); 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -18,23 +14,30 @@ export default function HomePage() {
     async function fetchHives() {
       try {
         setLoading(true);
-        // CONSULTA CLAVE: Traemos los datos de la tabla 'hives' (ID, nombre, etc.)
+        setError(null);
+
+        // CONSULTA: Traemos los datos de la tabla 'hives' (ID, nombre, etc.)
         const { data, error } = await supabase
           .from('hives')
           .select('hive_unique_id, name, location'); 
 
         if (error) {
-          throw error;
+          // Lanza el error al bloque catch para manejar fallos de RLS o conexión
+          throw error; 
         }
 
-        // Si hay datos, los guardamos en el estado
+        // Si data es null o undefined, establecemos un array vacío para evitar errores
         if (data) {
           setHives(data);
+        } else {
+          setHives([]); 
         }
 
       } catch (e) {
         console.error("Error fetching hives:", e.message);
-        setError("Error al cargar la lista de colmenas. Verifique la conexión a Supabase y la política RLS de la tabla 'hives'.");
+        // El mensaje de error es crucial para el usuario
+        setError("Error al cargar la lista de colmenas. Verifique la política RLS de la tabla 'hives' (debe permitir SELECT al rol 'public').");
+        setHives([]);
       } finally {
         setLoading(false);
       }
@@ -51,20 +54,23 @@ export default function HomePage() {
     <div className="homepage-container">
       
       {/* 1. BARRA DE PRONÓSTICO SEMANAL */}
-      {/* Si la clave del clima falla, esta barra simplemente no se mostrará */}
       <WeatherBar />
       
       <h1>Apiario Digital - Estado en Vivo ({hives.length} Colmena(s) Registrada(s))</h1>
 
       {/* 2. CUADRÍCULA DE COLMENAS */}
       <div className="hive-grid">
-        {hives.map((hive) => (
-          <HiveCard 
-            key={hive.hive_unique_id} 
-            hiveId={hive.hive_unique_id} // ID técnica
-            hiveName={hive.name}        // Nombre amigable
-            hiveLocation={hive.location} // Ubicación
-          />
+        {/* Usamos Array.isArray() para garantizar que 'hives' es un array antes de mapear. */}
+        {/* Verificamos que 'hive' no sea nulo antes de renderizar la tarjeta. */}
+        {Array.isArray(hives) && hives.map((hive) => (
+          hive && (
+            <HiveCard 
+              key={hive.hive_unique_id} 
+              hiveId={hive.hive_unique_id}     // ID técnica (ej. colmena_alfa_001)
+              hiveName={hive.name}            // Nombre amigable (ej. Colmena Principal)
+              hiveLocation={hive.location}    // Ubicación
+            />
+          )
         ))}
       </div>
 
@@ -85,8 +91,12 @@ export default function HomePage() {
             color: #555;
         }
         .error-state {
-            color: red;
+            color: #c0392b; /* Rojo más fuerte para errores */
             font-weight: bold;
+            background: #f7e6e4;
+            border-radius: 8px;
+            margin: 20px;
+            border: 1px solid #c0392b;
         }
       `}</style>
     </div>
