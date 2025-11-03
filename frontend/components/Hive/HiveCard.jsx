@@ -1,69 +1,113 @@
-import React from 'react';
-// Si usas Next.js, usa 'next/link'. Si usas React Router, usa 'react-router-dom'.
-import Link from 'next/link'; 
-import styles from './HiveCard.module.css'; // Usaremos un archivo CSS para el hexágono
+// /frontend/components/Hive/HiveCard.js
+import { useRouter } from 'next/router';
+import { useState, useEffect } from 'react';
 
-// Componente que muestra una colmena en la página de inicio
-const HiveCard = ({ hiveData }) => {
-  // Desestructuramos los datos del último registro
-  const { 
-    hive_unique_id, 
-    temperature, 
-    humidity, 
-    weight, 
-    sound_level, 
-    created_at 
-  } = hiveData;
-
-  // Asumimos un nombre más amigable para la interfaz, ej. desde una tabla 'hives'
-  const hiveName = hiveData.hives ? hiveData.hives.name : `Colmena ${hive_unique_id.slice(-3)}`;
-
-  // Formateo simple de la fecha de la última lectura
-  const lastUpdate = new Date(created_at).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' });
-
-  return (
-    // El Link envuelve la tarjeta para navegar al dashboard detallado
-    <Link href={`/hive/${hive_unique_id}`} passHref>
-      <div className={styles.hiveCard}>
-        
-        {/* Nombre y Última Actualización */}
-        <h3 className={styles.hiveName}>{hive.hive_name}</h3>
-        <p className={styles.lastUpdate}>Última lectura: {lastUpdate}</p>
-
-        {/* Contenedor de Símbolos y Valores */}
-        <div className={styles.dataGrid}>
-          
-          {/* Temperatura */}
-          <div className={styles.dataItem}>
-            <span className={styles.icon} role="img" aria-label="Temperatura">🌡️</span>
-            <span className={styles.value}>{temperature.toFixed(1)} °C</span>
-          </div>
-
-          {/* Humedad */}
-          <div className={styles.dataItem}>
-            <span className={styles.icon} role="img" aria-label="Humedad">💧</span>
-            <span className={styles.value}>{humidity.toFixed(0)} %</span>
-          </div>
-
-          {/* Peso */}
-          <div className={styles.dataItem}>
-            <span className={styles.icon} role="img" aria-label="Peso">⚖️</span>
-            <span className={styles.value}>{weight.toFixed(2)} kg</span>
-          </div>
-
-          {/* Sonido */}
-          <div className={styles.dataItem}>
-            <span className={styles.icon} role="img" aria-label="Sonido">🔊</span>
-            <span className={styles.value}>{sound_level}</span>
-          </div>
-          
-        </div>
-
-        <span className={styles.detailsButton}>Ver Dashboard &raquo;</span>
-
-      </div>
-    </Link>
-  );
+// Colores basados en el estado
+const STATUS_COLORS = {
+  active: '#2ecc71', // Verde
+  inactive: '#f39c12', // Naranja/Amarillo
+  error: '#e74c3c', // Rojo
 };
 
-export default HiveCard;
+export default function HiveCard({ hiveId, hiveName, hiveLocation }) {
+  const router = useRouter();
+  
+  // Simulación de estado para fines de diseño. En un proyecto real, esto vendría de una API.
+  const [status, setStatus] = useState('active'); // Puede ser 'active', 'inactive', 'error'
+  
+  // En un proyecto real: Obtendrías el estado de la colmena (última hora de envío)
+
+  // Función para manejar el clic y navegar a la página de detalle
+  const handleCardClick = () => {
+    // Usamos el ID técnico para la ruta
+    router.push(`/hive/${hiveId}`);
+  };
+
+  // Prevenir que el componente se renderice si faltan propiedades críticas
+  if (!hiveId || !hiveName) {
+    console.error("HiveCard: Propiedades críticas (ID o Nombre) no definidas.");
+    return null; 
+  }
+
+  const statusStyle = {
+    backgroundColor: STATUS_COLORS[status] || STATUS_COLORS.inactive,
+  };
+
+  return (
+    <div className="hive-card" onClick={handleCardClick}>
+      <div className="header" style={statusStyle}>
+        {hiveName}
+      </div>
+      
+      <div className="content">
+        <p className="id-text">ID Técnica: <span>{hiveId}</span></p>
+        <p className="location-text">Ubicación: <span>{hiveLocation || 'Sin definir'}</span></p>
+        
+        <div className="status-indicator">
+            <span className="status-label">Estado:</span> 
+            <span className="status-badge" style={statusStyle}>
+                {status === 'active' ? 'En Línea' : status === 'inactive' ? 'Inactivo' : 'Error'}
+            </span>
+        </div>
+      </div>
+
+      <style jsx>{`
+        .hive-card {
+          border-radius: 12px;
+          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+          overflow: hidden;
+          transition: transform 0.2s, box-shadow 0.2s;
+          cursor: pointer;
+          background-color: #ffffff;
+          display: flex;
+          flex-direction: column;
+        }
+        .hive-card:hover {
+          transform: translateY(-5px);
+          box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15);
+        }
+        .header {
+          color: white;
+          padding: 15px;
+          font-size: 1.5em;
+          font-weight: 700;
+          text-align: center;
+        }
+        .content {
+          padding: 20px;
+          flex-grow: 1;
+        }
+        .id-text, .location-text {
+            font-size: 0.9em;
+            color: #555;
+            margin-bottom: 10px;
+        }
+        .id-text span, .location-text span {
+            font-weight: 400;
+            color: #333;
+            display: block;
+            margin-top: 2px;
+        }
+        .status-indicator {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-top: 20px;
+            padding-top: 15px;
+            border-top: 1px solid #eee;
+        }
+        .status-label {
+            font-weight: 700;
+            color: #333;
+        }
+        .status-badge {
+            color: white;
+            padding: 5px 12px;
+            border-radius: 20px;
+            font-size: 0.9em;
+            font-weight: 700;
+        }
+      `}</style>
+    </div>
+  );
+}
