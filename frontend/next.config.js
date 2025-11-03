@@ -5,9 +5,19 @@ const nextConfig = {
   reactStrictMode: true,
   swcMinify: true,
   
-  // CONFIGURACIÓN CLAVE PARA IMÁGENES EXTERNAS
+  // CONFIGURACIÓN ACTUALIZADA: Usando remotePatterns
   images: {
-    domains: ['cdn.weatherapi.com'], 
+    // Permite la carga segura de imágenes de WeatherAPI
+    remotePatterns: [
+      {
+        protocol: 'https',
+        hostname: 'cdn.weatherapi.com',
+        // Opcional: Especifica los puertos si no son 80/443
+        // port: '',
+        // Opcional: Especifica el patrón de ruta si es necesario (ej: '/icons/**')
+        // pathname: '/**',
+      },
+    ],
   },
 }
 
