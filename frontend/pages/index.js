@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { supabase } from '../../utils/supabase';
+import { supabase } from '../utils/supabase'; // RUTA CORRECTA
 import HiveCard from '../components/Hive/HiveCard'; // Ajusta la ruta si es necesario
 // Importa tu componente de barra de clima aquí si ya lo creaste
 // import WeatherBar from '../components/Layout/WeatherBar'; 
