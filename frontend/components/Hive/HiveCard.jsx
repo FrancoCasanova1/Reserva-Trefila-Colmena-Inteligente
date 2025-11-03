@@ -27,7 +27,7 @@ const HiveCard = ({ hiveData }) => {
       <div className={styles.hiveCard}>
         
         {/* Nombre y Última Actualización */}
-        <h3 className={styles.hiveName}>{hiveName}</h3>
+        <h3 className={styles.hiveName}>{hive.hive_name}</h3>
         <p className={styles.lastUpdate}>Última lectura: {lastUpdate}</p>
 
         {/* Contenedor de Símbolos y Valores */}

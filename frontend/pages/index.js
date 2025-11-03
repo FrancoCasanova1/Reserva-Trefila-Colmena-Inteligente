@@ -1,110 +1,94 @@
-import React, { useState, useEffect } from 'react';
-import { supabase } from '../utils/supabase'; // RUTA CORRECTA
+// /frontend/pages/index.js
+import { useEffect, useState } from 'react';
+import { useSupabaseClient } from '@supabase/auth-helpers-react';
 import HiveCard from '../components/Hive/HiveCard'; 
-import WeatherBar from '../components/Layout/WeatherBar'; // <<-- AÑADIDO
-// Importa tu componente de barra de clima aquí si ya lo creaste
-// import WeatherBar from '../components/Layout/WeatherBar'; 
+import WeatherBar from '../components/Layout/WeatherBar';
 
-// --- FUNCIÓN DE CONSULTA DE DATOS ---
+// NOTA: El componente WeatherBar podría seguir fallando con 500 si la clave de OpenWeatherMap no está activa.
+// El resto del código de Supabase funcionará sin problemas.
 
-// Esta función implementa la lógica para obtener el último registro de cada colmena.
-async function getLatestHiveStates() {
-  // NOTA: Para obtener el nombre de la colmena junto con el dato, 
-  // la tabla 'sensor_data' DEBE tener una clave foránea (FK) que apunte a la ID única 
-  // de la colmena en una tabla separada llamada 'hives'.
-  // Si no tienes la tabla 'hives', usa .select('*') y solo verás la ID única.
-  
-  const { data, error } = await supabase
-    // La consulta usa el rol 'anon', por eso es esencial la política RLS.
-    .from('sensor_data')
-    .select('*') // Consulta todos los campos
-    .order('created_at', { ascending: false }); // Ordena por el más reciente
-
-  if (error) {
-    console.error('Error al obtener datos:', error);
-    return [];
-  }
-
-  // Lógica para agrupar y obtener SÓLO el registro más reciente por colmena
-  const latestDataMap = {};
-  for (const item of data) {
-      if (!latestDataMap[item.hive_unique_id]) {
-          latestDataMap[item.hive_unique_id] = item;
-      }
-  }
-
-  return Object.values(latestDataMap);
-}
-
-// --- COMPONENTE PRINCIPAL DE LA PÁGINA ---
-
-const HomePage = () => {
-  const [hiveStates, setHiveStates] = useState([]);
+export default function HomePage() {
+  const supabase = useSupabaseClient();
+  // Cambiamos el estado para almacenar objetos de colmena, no solo strings de ID
+  const [hives, setHives] = useState([]); 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  
-  // En este punto, deberías implementar la verificación de usuario de administrador.
-  // Por simplicidad, por ahora cargamos los datos directamente.
 
   useEffect(() => {
-    const fetchData = async () => {
+    async function fetchHives() {
       try {
-        const data = await getLatestHiveStates();
-        setHiveStates(data);
-      } catch (err) {
-        setError(err.message);
+        setLoading(true);
+        // CONSULTA CLAVE: Traemos los datos de la tabla 'hives' (ID, nombre, etc.)
+        const { data, error } = await supabase
+          .from('hives')
+          .select('hive_unique_id, name, location'); 
+
+        if (error) {
+          throw error;
+        }
+
+        // Si hay datos, los guardamos en el estado
+        if (data) {
+          setHives(data);
+        }
+
+      } catch (e) {
+        console.error("Error fetching hives:", e.message);
+        setError("Error al cargar la lista de colmenas. Verifique la conexión a Supabase y la política RLS de la tabla 'hives'.");
       } finally {
         setLoading(false);
       }
-    };
+    }
     
-    fetchData();
+    fetchHives();
+  }, [supabase]);
 
-    // Opcional: Establecer un intervalo de actualización periódica del dashboard (ej. cada 60 segundos)
-    const intervalId = setInterval(fetchData, 60000); 
-
-    // Limpieza al desmontar el componente
-    return () => clearInterval(intervalId);
-  }, []);
-
-  if (loading) return <p>Cargando estado de las colmenas...</p>;
-  if (error) return <p>Error al cargar: {error}</p>;
-  if (hiveStates.length === 0) return <p>No se encontraron datos de colmenas. Asegúrese de que el ESP32 esté enviando datos.</p>;
+  if (loading) return <div className="loading-state">Cargando dashboard y colmenas...</div>;
+  if (error) return <div className="error-state">{error}</div>;
+  if (hives.length === 0) return <div className="empty-state">No hay colmenas registradas. ¡Añade una en el panel de administración!</div>;
 
   return (
     <div className="homepage-container">
       
       {/* 1. BARRA DE PRONÓSTICO SEMANAL */}
-      <WeatherBar /> {/* <<-- AÑADIDO */}
+      {/* Si la clave del clima falla, esta barra simplemente no se mostrará */}
+      <WeatherBar />
       
-      <h1>Apiario Digital - Estado en Vivo</h1>
+      <h1>Apiario Digital - Estado en Vivo ({hives.length} Colmena(s) Registrada(s))</h1>
 
       {/* 2. CUADRÍCULA DE COLMENAS */}
-      <div className="hives-grid">
-        {hiveStates.map((hive) => (
-          // Usamos la ID única del ESP32 como clave
-          <HiveCard key={hive.hive_unique_id} hiveData={hive} />
+      <div className="hive-grid">
+        {hives.map((hive) => (
+          <HiveCard 
+            key={hive.hive_unique_id} 
+            hiveId={hive.hive_unique_id} // ID técnica
+            hiveName={hive.name}        // Nombre amigable
+            hiveLocation={hive.location} // Ubicación
+          />
         ))}
       </div>
-      
-      {/* NOTA: Agregar un botón/link al Panel de Administrador aquí */}
-      
-      <style jsx global>{`
-        /* Estilos globales para la cuadrícula */
+
+      <style jsx>{`
         .homepage-container {
           padding: 20px;
           text-align: center;
         }
-        .hives-grid {
-          display: flex;
-          flex-wrap: wrap;
-          justify-content: center;
-          gap: 20px; /* Espacio entre los hexágonos */
+        .hive-grid {
+          display: grid;
+          grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+          gap: 20px;
           margin-top: 30px;
+        }
+        .loading-state, .error-state, .empty-state {
+            padding: 50px;
+            font-size: 1.2em;
+            color: #555;
+        }
+        .error-state {
+            color: red;
+            font-weight: bold;
         }
       `}</style>
     </div>
   );
-};
-
-export default HomePage;
+}
