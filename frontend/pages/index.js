@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../utils/supabase'; // RUTA CORRECTA
-import HiveCard from '../components/Hive/HiveCard'; // Ajusta la ruta si es necesario
+import HiveCard from '../components/Hive/HiveCard'; 
+import WeatherBar from '../components/Layout/WeatherBar'; // <<-- AÑADIDO
 // Importa tu componente de barra de clima aquí si ya lo creaste
 // import WeatherBar from '../components/Layout/WeatherBar'; 
 
@@ -74,7 +75,7 @@ const HomePage = () => {
     <div className="homepage-container">
       
       {/* 1. BARRA DE PRONÓSTICO SEMANAL */}
-      {/* <WeatherBar /> // Descomentar cuando lo implementes */}
+      <WeatherBar /> {/* <<-- AÑADIDO */}
       
       <h1>Apiario Digital - Estado en Vivo</h1>
 
