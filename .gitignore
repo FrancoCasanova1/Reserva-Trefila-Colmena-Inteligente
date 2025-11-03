@@ -1,0 +1,10 @@
+# Directorios
+node_modules
+.next
+.vscode
+
+# Archivos de caché/log
+npm-debug.log
+.env
+.env.local
+.DS_Store
