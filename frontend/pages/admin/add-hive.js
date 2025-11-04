@@ -1,5 +1,6 @@
 // /frontend/pages/admin/add-hive.js
 
+import { useState, useEffect } from 'react'; // 🚨 AÑADIR useEffect
 import { useState } from 'react';
 import { useRouter } from 'next/router';
 import Head from 'next/head';
@@ -36,7 +37,7 @@ export default function AddHivePage() {
             </AdminLayout>
         );
     }
-    
+
     const handleSubmit = async (e) => {
         e.preventDefault();
         
