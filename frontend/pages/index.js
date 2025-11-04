@@ -5,7 +5,8 @@ import { useSupabaseClient } from '@supabase/auth-helpers-react';
 import Link from 'next/link';
 import Head from 'next/head';
 // Importar el componente WeatherBar desde su ubicación en components/Layout
-import WeatherBar from '../components/Layout/WeatherBar'; 
+import WeatherBar from '../components/Layout/WeatherBar';
+import MetricsSummary from '../components/Dashboard/MetricsSummary'; 
 
 // --- Componente para la Tarjeta de Colmena ---
 function HiveCard({ hive, latestData }) {
@@ -175,7 +176,7 @@ export default function Home() {
 
             {/* Componente de Clima */}
             <WeatherBar />
-
+            <MetricsSummary />
             {loading && <p className="status-message">Cargando datos del apiario...</p>}
             {error && <p className="error-message">Error: {error}</p>}
 

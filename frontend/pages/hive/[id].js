@@ -1,4 +1,4 @@
-// /frontend/pages/hive/[id].js (Código Final con Filtros de Tiempo)
+// /frontend/pages/hive/[id].js (Código Final con Filtros de Tiempo y Sound Level)
 
 import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/router';
@@ -18,7 +18,8 @@ const CustomTooltip = ({ active, payload, label, unit }) => {
                 <p className="label">{`Tiempo: ${formattedLabel}`}</p>
                 {payload.map((entry, index) => (
                     <p key={`item-${index}`} style={{ color: entry.color }}>
-                        {`${entry.name}: ${entry.value.toFixed(2)} ${unit}`}
+                        {/* Se ajusta el nombre si es sound_level a Nivel de Ruido */}
+                        {`${entry.name}: ${entry.value !== null && entry.value !== undefined ? entry.value.toFixed(2) : 'N/A'} ${unit}`}
                     </p>
                 ))}
             </div>
@@ -43,7 +44,16 @@ const CustomChart = ({ data, dataKey, name, color, unit }) => (
                 <Tooltip content={<CustomTooltip unit={unit} />} />
                 
                 <Legend />
-                <Line type="monotone" dataKey={dataKey} stroke={color} name={name} dot={false} strokeWidth={2} />
+                <Line 
+                    type="monotone" 
+                    dataKey={dataKey} 
+                    stroke={color} 
+                    name={name} 
+                    dot={false} 
+                    strokeWidth={2} 
+                    // Asegurar que solo se incluyan puntos válidos en el gráfico
+                    isAnimationActive={false}
+                />
             </LineChart>
         </ResponsiveContainer>
     </div>
@@ -59,14 +69,12 @@ export default function HiveDetailPage() {
     const [sensorData, setSensorData] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
-    // Nuevo estado para el filtro (días)
     const [timeFilter, setTimeFilter] = useState(1); // 1 día por defecto
 
     // Función para obtener la fecha de inicio del rango
     const getStartTime = (days) => {
         const date = new Date();
         date.setDate(date.getDate() - days);
-        // Formato ISO 8601 requerido por Supabase
         return date.toISOString(); 
     };
 
@@ -77,11 +85,10 @@ export default function HiveDetailPage() {
             setLoading(true);
             setError(null);
 
-            // Calcula la fecha mínima de las lecturas basadas en el filtro
             const startTime = getStartTime(timeFilter);
             
             try {
-                // 1. Obtener nombre amigable (no depende del filtro)
+                // 1. Obtener nombre amigable
                 const { data: hiveData } = await supabase
                     .from('hives')
                     .select('name')
@@ -97,9 +104,9 @@ export default function HiveDetailPage() {
                 // 2. Obtener datos de sensores filtrados por tiempo
                 const { data: sensorRows, error: sensorError } = await supabase
                     .from('sensor_data')
-                    .select('created_at, temperature, humidity, weight, sound_level')
+                    // Aseguramos que se seleccionen todos los datos
+                    .select('created_at, temperature, humidity, weight, sound_level') 
                     .eq('hive_unique_id', hive_unique_id)
-                    // CRÍTICO: Filtro para obtener solo datos posteriores a 'startTime'
                     .gte('created_at', startTime) 
                     .order('created_at', { ascending: false }); 
 
@@ -118,9 +125,8 @@ export default function HiveDetailPage() {
             }
         }
 
-        // Se ejecuta cada vez que cambia el ID o el filtro de tiempo
         fetchData(); 
-    }, [hive_unique_id, timeFilter, supabase]); // Añadimos timeFilter a las dependencias
+    }, [hive_unique_id, timeFilter, supabase]);
 
     // Resumen de estado actual (calculado solo cuando sensorData cambia)
     const latestData = useMemo(() => sensorData.length > 0 ? sensorData[sensorData.length - 1] : null, [sensorData]);
@@ -128,11 +134,11 @@ export default function HiveDetailPage() {
     if (loading) return <div className="loading-state">Cargando historial de {hive_unique_id}...</div>;
     if (error) return <div className="error-state">{error}</div>;
     if (!latestData && sensorData.length === 0) return (
-         <div className="empty-state">
-            <Link href="/" className="back-link">&larr; Volver al Dashboard</Link>
-            <h2>Colmena: {hiveName}</h2>
-            <p>**No hay datos históricos** registrados en el rango seleccionado ({timeFilter} día(s)).</p>
-        </div>
+          <div className="empty-state">
+              <Link href="/" className="back-link">&larr; Volver al Dashboard</Link>
+              <h2>Colmena: {hiveName}</h2>
+              <p>**No hay datos históricos** registrados en el rango seleccionado ({timeFilter} día(s)).</p>
+          </div>
     );
     
     // Opciones de filtro
@@ -167,9 +173,11 @@ export default function HiveDetailPage() {
             {/* 1. Resumen de Estado Actual */}
             {latestData && (
                 <div className="summary-cards">
-                    <div className="card temp-card">🌡️ Temp: <span>{latestData.temperature.toFixed(1)}°C</span></div>
-                    <div className="card hum-card">💧 Hum: <span>{latestData.humidity.toFixed(1)}%</span></div>
-                    <div className="card weight-card">⚖️ Peso: <span>{latestData.weight.toFixed(2)} kg</span></div>
+                    <div className="card temp-card">🌡️ Temp: <span>{latestData.temperature ? latestData.temperature.toFixed(1) : 'N/A'}°C</span></div>
+                    <div className="card hum-card">💧 Hum: <span>{latestData.humidity ? latestData.humidity.toFixed(1) : 'N/A'}%</span></div>
+                    <div className="card weight-card">⚖️ Peso: <span>{latestData.weight ? latestData.weight.toFixed(2) : 'N/A'} kg</span></div>
+                    {/* ADICIÓN: TARJETA DE NIVEL DE RUIDO */}
+                    <div className="card sound-card">🔊 Ruido: <span>{latestData.sound_level ? latestData.sound_level.toFixed(0) : 'N/A'} dB</span></div>
                 </div>
             )}
 
@@ -179,6 +187,8 @@ export default function HiveDetailPage() {
                     <CustomChart data={sensorData} dataKey="weight" name="Peso (kg)" color="#e59400" unit="kg" />
                     <CustomChart data={sensorData} dataKey="temperature" name="Temperatura (°C)" color="#ff7300" unit="°C" />
                     <CustomChart data={sensorData} dataKey="humidity" name="Humedad (%)" color="#3879ff" unit="%" />
+                    {/* ADICIÓN: GRÁFICO DE NIVEL DE RUIDO */}
+                    <CustomChart data={sensorData} dataKey="sound_level" name="Nivel de Ruido (dB)" color="#00C49F" unit="dB" />
                 </div>
             )}
             
@@ -272,6 +282,7 @@ export default function HiveDetailPage() {
                 .temp-card { border-color: #ff7300; }
                 .hum-card { border-color: #3879ff; }
                 .weight-card { border-color: #e59400; }
+                .sound-card { border-color: #00C49F; } /* Nuevo color para el sonido */
                 .card span {
                     font-weight: bold;
                     font-size: 1.5em;
@@ -280,8 +291,13 @@ export default function HiveDetailPage() {
                 }
                 .charts-grid {
                     display: grid;
-                    grid-template-columns: 1fr;
+                    grid-template-columns: 1fr 1fr; /* 2 columnas */
                     gap: 30px;
+                }
+                @media (max-width: 1000px) {
+                    .charts-grid {
+                        grid-template-columns: 1fr; /* 1 columna en móviles/tabletas */
+                    }
                 }
             `}</style>
         </div>
