@@ -1,18 +1,18 @@
 // /frontend/pages/admin/add-hive.js
 
-import { useState, useEffect } from 'react'; // <-- ÚNICA línea para importar hooks de React
+import { useState, useEffect } from 'react'; // 🚨 Ambos hooks de React importados
 import { useRouter } from 'next/router';
 import Head from 'next/head';
 import { useUser, useSupabaseClient } from '@supabase/auth-helpers-react';
 
-import AdminLayout from '../../components/Layout/AdminLayout';
+import AdminLayout from '../../../components/Layout/AdminLayout'; // Ajusta la extensión o ruta si es necesario
 
 export default function AddHivePage() {
     const supabase = useSupabaseClient();
     const router = useRouter();
     
-    // Obtener el usuario autenticado (requerido para la inserción)
-    const { user } = useUser() || {}; 
+    // 🚨 CORRECCIÓN: Desestructurar 'user' y renombrar 'isLoading' a 'isAuthLoading'
+    const { user, isLoading: isAuthLoading } = useUser() || {}; 
 
     // Estados del formulario
     const [name, setName] = useState('');
@@ -21,21 +21,15 @@ export default function AddHivePage() {
     const [error, setError] = useState(null);
     const [success, setSuccess] = useState(false);
 
+    // 🚨 LÓGICA DE REDIRECCIÓN EN CLIENTE (useEffect)
+    // Esto previene el error "No router instance found" durante el build/SSR.
     useEffect(() => {
-        // Si no está cargando y no hay usuario, redirigir
+        // Si la carga de autenticación terminó y no hay usuario, redirigir.
         if (!isAuthLoading && !user) {
             router.push('/login');
         }
     }, [isAuthLoading, user, router]);
 
-    // Durante la carga o si no hay usuario (antes de la redirección), mostramos algo temporal
-    if (isAuthLoading || !user) {
-        return (
-            <AdminLayout>
-                <div className="status-message">Verificando sesión...</div>
-            </AdminLayout>
-        );
-    }
 
     const handleSubmit = async (e) => {
         e.preventDefault();
@@ -51,18 +45,16 @@ export default function AddHivePage() {
 
         try {
             const newHive = {
-                // 🔑 CLAVE: Asignamos el ID del usuario actual.
-                // Esto garantiza que la colmena pertenezca al usuario que la crea.
+                // CLAVE: Asignar el ID del usuario actual
                 user_id: user.id, 
                 name: name.trim(),
                 location: location.trim(),
-                // Asegúrate de incluir aquí cualquier otro campo obligatorio de tu tabla 'hives'
             };
 
             const { data, error } = await supabase
                 .from('hives')
                 .insert([newHive])
-                .select(); // Usamos select() para confirmar la fila insertada
+                .select(); 
 
             if (error) {
                 console.error("Error de inserción de Supabase:", error);
@@ -72,7 +64,7 @@ export default function AddHivePage() {
             console.log("Colmena creada con éxito:", data);
             setSuccess(true);
             
-            // Redirigir de vuelta a la lista de colmenas para que el usuario la vea
+            // Redirigir de vuelta a la lista de colmenas
             router.push('/admin/hives?created=true');
 
         } catch (e) {
@@ -83,6 +75,19 @@ export default function AddHivePage() {
         }
     };
 
+    // 🚨 Manejo del estado de carga y usuario
+    if (isAuthLoading || !user) {
+        return (
+            <AdminLayout>
+                <div className="status-message">Verificando sesión...</div>
+                <style jsx>{`
+                    .status-message { text-align: center; padding: 20px; font-size: 1.2em; color: #2c3e50; }
+                `}</style>
+            </AdminLayout>
+        );
+    }
+    
+    // Renderizado del formulario
     return (
         <AdminLayout>
             <Head>
@@ -127,8 +132,8 @@ export default function AddHivePage() {
                 </button>
             </form>
 
-            {/* Estilos JSX (abreviados para concisión) */}
             <style jsx>{`
+                /* Estilos básicos */
                 .page-title { color: #2c3e50; border-bottom: 2px solid #f39c12; padding-bottom: 10px; margin-bottom: 20px; }
                 .hive-form { max-width: 500px; margin-top: 30px; padding: 20px; border: 1px solid #ccc; border-radius: 8px; }
                 .form-group { margin-bottom: 15px; }
