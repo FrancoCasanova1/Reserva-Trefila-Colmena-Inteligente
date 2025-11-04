@@ -1,104 +1,483 @@
 // /frontend/pages/index.js
-import { useEffect, useState } from 'react';
+
+import { useState, useEffect } from 'react';
 import { useSupabaseClient } from '@supabase/auth-helpers-react';
-import HiveCard from '../components/Hive/HiveCard'; 
-import WeatherBar from '../components/Layout/WeatherBar';
+import Link from 'next/link';
+import Head from 'next/head';
 
-export default function HomePage() {
-  const supabase = useSupabaseClient();
-  const [hives, setHives] = useState([]); 
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+// --- Nuevo Componente para la Tarjeta de Colmena (Mejorado) ---
+function HiveCard({ hive, latestData }) {
+    // Determinar la clase para la ganancia de peso (verde para positivo, rojo para negativo)
+    const changeClass = latestData?.weight_change > 0 
+        ? 'gain' 
+        : latestData?.weight_change < 0 
+        ? 'loss' 
+        : 'neutral';
+        
+    const changeText = latestData?.weight_change !== null && latestData?.weight_change !== undefined
+        ? `${latestData.weight_change.toFixed(2)} kg`
+        : 'Datos insuficientes';
 
-  useEffect(() => {
-    async function fetchHives() {
-      try {
+    const latestWeight = latestData?.latest_weight !== null && latestData?.latest_weight !== undefined
+        ? `${latestData.latest_weight.toFixed(2)} kg`
+        : 'N/A';
+
+    return (
+        <div className="hive-card">
+            <h3>{hive.name || `Colmena ID: ${hive.hive_unique_id}`}</h3>
+            <p className="location">📍 {hive.location || 'Ubicación sin definir'}</p>
+            
+            <div className="data-row">
+                <span className="label">Peso Actual:</span>
+                <span className="value">{latestWeight}</span>
+            </div>
+
+            <div className="data-row">
+                <span className="label">Cambio Diario (24h):</span>
+                <span className={`value change ${changeClass}`}>
+                    {changeText}
+                </span>
+            </div>
+            
+            <Link href={`/hive/${hive.hive_unique_id}`} className="view-button">
+                Ver Historial &rarr;
+            </Link>
+
+            <style jsx>{`
+                .hive-card {
+                    background-color: #ffffff;
+                    padding: 25px;
+                    border-radius: 10px;
+                    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+                    transition: transform 0.3s;
+                    border-top: 5px solid #f39c12;
+                    display: flex;
+                    flex-direction: column;
+                    justify-content: space-between;
+                }
+                .hive-card:hover {
+                    transform: translateY(-5px);
+                }
+                h3 {
+                    margin-top: 0;
+                    color: #2c3e50;
+                    font-size: 1.5em;
+                    border-bottom: 1px dashed #eee;
+                    padding-bottom: 10px;
+                    margin-bottom: 15px;
+                }
+                .location {
+                    color: #7f8c8d;
+                    margin-bottom: 20px;
+                }
+                .data-row {
+                    display: flex;
+                    justify-content: space-between;
+                    margin-bottom: 10px;
+                    font-size: 1.1em;
+                }
+                .label {
+                    color: #34495e;
+                    font-weight: 500;
+                }
+                .value {
+                    font-weight: bold;
+                }
+                .change.gain {
+                    color: #27ae60; /* Verde */
+                }
+                .change.loss {
+                    color: #e74c3c; /* Rojo */
+                }
+                .change.neutral {
+                    color: #3498db; /* Azul */
+                }
+                .view-button {
+                    display: block;
+                    text-align: center;
+                    margin-top: 20px;
+                    padding: 10px;
+                    background-color: #f39c12;
+                    color: white;
+                    text-decoration: none;
+                    border-radius: 5px;
+                    transition: background-color 0.3s;
+                }
+                .view-button:hover {
+                    background-color: #e67e22;
+                }
+            `}</style>
+        </div>
+    );
+}
+
+// --- Componente Principal ---
+export default function Home() {
+    const supabase = useSupabaseClient();
+    const [hives, setHives] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState(null);
+
+    useEffect(() => {
+        fetchHives();
+    }, []);
+
+    const fetchHives = async () => {
         setLoading(true);
         setError(null);
+        try {
+            // 1. Obtener la lista de colmenas
+            const { data: hiveList, error: hiveError } = await supabase
+                .from('hives')
+                .select('hive_unique_id, name, location')
+                .order('name', { ascending: true });
 
-        // CONSULTA: Traemos los datos de la tabla 'hives' (ID, nombre, etc.)
-        const { data, error } = await supabase
-          .from('hives')
-          .select('hive_unique_id, name, location'); 
+            if (hiveError) throw hiveError;
 
-        if (error) {
-          // Lanza el error al bloque catch para manejar fallos de RLS o conexión
-          throw error; 
+            // 2. Obtener datos analíticos (peso) para cada colmena usando la RPC
+            const hivesWithData = await Promise.all(
+                hiveList.map(async (hive) => {
+                    // Llamar a la función SQL de Supabase
+                    const { data: rpcData, error: rpcError } = await supabase.rpc('get_daily_weight_change', { hive_id: hive.hive_unique_id });
+
+                    if (rpcError) {
+                        console.error(`Error fetching weight change for ${hive.hive_unique_id}:`, rpcError);
+                        return { ...hive, latestData: { change: null, latest_weight: null } };
+                    }
+                    
+                    // rpcData es un objeto JSON: { change: X, latest_weight: Y }
+                    return { ...hive, latestData: rpcData };
+                })
+            );
+
+            setHives(hivesWithData);
+
+        } catch (e) {
+            console.error("Error al cargar colmenas:", e);
+            setError("Fallo al cargar datos. Verifique la conexión o las políticas RLS.");
+        } finally {
+            setLoading(false);
         }
+    };
 
-        // Si data es null o undefined, establecemos un array vacío para evitar errores
-        if (data) {
-          setHives(data);
-        } else {
-          setHives([]); 
+
+    return (
+        <div className="container">
+            <Head>
+                <title>Apiario Digital</title>
+            </Head>
+
+            <header>
+                <h1>Monitoreo de Colmenas</h1>
+                <Link href="/login" className="login-link">
+                    Admin Login
+                </Link>
+            </header>
+
+            {loading && <p className="status-message">Cargando datos del apiario...</p>}
+            {error && <p className="error-message">Error: {error}</p>}
+
+            {!loading && hives.length === 0 && !error && (
+                <p className="status-message">No hay colmenas registradas. Vaya a Admin Login para agregar una.</p>
+            )}
+
+            <div className="hive-grid">
+                {hives.map((hive) => (
+                    <HiveCard 
+                        key={hive.hive_unique_id} 
+                        hive={hive} 
+                        latestData={hive.latestData} 
+                    />
+                ))}
+            </div>
+
+            <style jsx>{`
+                .container {
+                    padding: 40px 20px;
+                    max-width: 1200px;
+                    margin: 0 auto;
+                }
+                header {
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    margin-bottom: 50px;
+                    border-bottom: 2px solid #f39c12;
+                    padding-bottom: 15px;
+                }
+                h1 {
+                    color: #2c3e50;
+                    font-size: 2.5em;
+                }
+                .login-link {
+                    background-color: #3498db;
+                    color: white;
+                    padding: 10px 15px;
+                    border-radius: 5px;
+                    text-decoration: none;
+                    transition: background-color 0.2s;
+                }
+                .login-link:hover {
+                    background-color: #2980b9;
+                }
+                .status-message, .error-message {
+                    text-align: center;
+                    padding: 20px;
+                    margin-top: 30px;
+                    border-radius: 8px;
+                    font-size: 1.1em;
+                }
+                .error-message {
+                    background-color: #fdd;
+                    color: #c0392b;
+                }
+                .hive-grid {
+                    display: grid;
+                    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+                    gap: 30px;
+                }
+            `}</style>
+        </div>
+    );
+}// /frontend/pages/index.js
+
+import { useState, useEffect } from 'react';
+import { useSupabaseClient } from '@supabase/auth-helpers-react';
+import Link from 'next/link';
+import Head from 'next/head';
+
+// --- Nuevo Componente para la Tarjeta de Colmena (Mejorado) ---
+function HiveCard({ hive, latestData }) {
+    // Determinar la clase para la ganancia de peso (verde para positivo, rojo para negativo)
+    const changeClass = latestData?.weight_change > 0 
+        ? 'gain' 
+        : latestData?.weight_change < 0 
+        ? 'loss' 
+        : 'neutral';
+        
+    const changeText = latestData?.weight_change !== null && latestData?.weight_change !== undefined
+        ? `${latestData.weight_change.toFixed(2)} kg`
+        : 'Datos insuficientes';
+
+    const latestWeight = latestData?.latest_weight !== null && latestData?.latest_weight !== undefined
+        ? `${latestData.latest_weight.toFixed(2)} kg`
+        : 'N/A';
+
+    return (
+        <div className="hive-card">
+            <h3>{hive.name || `Colmena ID: ${hive.hive_unique_id}`}</h3>
+            <p className="location">📍 {hive.location || 'Ubicación sin definir'}</p>
+            
+            <div className="data-row">
+                <span className="label">Peso Actual:</span>
+                <span className="value">{latestWeight}</span>
+            </div>
+
+            <div className="data-row">
+                <span className="label">Cambio Diario (24h):</span>
+                <span className={`value change ${changeClass}`}>
+                    {changeText}
+                </span>
+            </div>
+            
+            <Link href={`/hive/${hive.hive_unique_id}`} className="view-button">
+                Ver Historial &rarr;
+            </Link>
+
+            <style jsx>{`
+                .hive-card {
+                    background-color: #ffffff;
+                    padding: 25px;
+                    border-radius: 10px;
+                    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+                    transition: transform 0.3s;
+                    border-top: 5px solid #f39c12;
+                    display: flex;
+                    flex-direction: column;
+                    justify-content: space-between;
+                }
+                .hive-card:hover {
+                    transform: translateY(-5px);
+                }
+                h3 {
+                    margin-top: 0;
+                    color: #2c3e50;
+                    font-size: 1.5em;
+                    border-bottom: 1px dashed #eee;
+                    padding-bottom: 10px;
+                    margin-bottom: 15px;
+                }
+                .location {
+                    color: #7f8c8d;
+                    margin-bottom: 20px;
+                }
+                .data-row {
+                    display: flex;
+                    justify-content: space-between;
+                    margin-bottom: 10px;
+                    font-size: 1.1em;
+                }
+                .label {
+                    color: #34495e;
+                    font-weight: 500;
+                }
+                .value {
+                    font-weight: bold;
+                }
+                .change.gain {
+                    color: #27ae60; /* Verde */
+                }
+                .change.loss {
+                    color: #e74c3c; /* Rojo */
+                }
+                .change.neutral {
+                    color: #3498db; /* Azul */
+                }
+                .view-button {
+                    display: block;
+                    text-align: center;
+                    margin-top: 20px;
+                    padding: 10px;
+                    background-color: #f39c12;
+                    color: white;
+                    text-decoration: none;
+                    border-radius: 5px;
+                    transition: background-color 0.3s;
+                }
+                .view-button:hover {
+                    background-color: #e67e22;
+                }
+            `}</style>
+        </div>
+    );
+}
+
+// --- Componente Principal ---
+export default function Home() {
+    const supabase = useSupabaseClient();
+    const [hives, setHives] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState(null);
+
+    useEffect(() => {
+        fetchHives();
+    }, []);
+
+    const fetchHives = async () => {
+        setLoading(true);
+        setError(null);
+        try {
+            // 1. Obtener la lista de colmenas
+            const { data: hiveList, error: hiveError } = await supabase
+                .from('hives')
+                .select('hive_unique_id, name, location')
+                .order('name', { ascending: true });
+
+            if (hiveError) throw hiveError;
+
+            // 2. Obtener datos analíticos (peso) para cada colmena usando la RPC
+            const hivesWithData = await Promise.all(
+                hiveList.map(async (hive) => {
+                    // Llamar a la función SQL de Supabase
+                    const { data: rpcData, error: rpcError } = await supabase.rpc('get_daily_weight_change', { hive_id: hive.hive_unique_id });
+
+                    if (rpcError) {
+                        console.error(`Error fetching weight change for ${hive.hive_unique_id}:`, rpcError);
+                        return { ...hive, latestData: { change: null, latest_weight: null } };
+                    }
+                    
+                    // rpcData es un objeto JSON: { change: X, latest_weight: Y }
+                    return { ...hive, latestData: rpcData };
+                })
+            );
+
+            setHives(hivesWithData);
+
+        } catch (e) {
+            console.error("Error al cargar colmenas:", e);
+            setError("Fallo al cargar datos. Verifique la conexión o las políticas RLS.");
+        } finally {
+            setLoading(false);
         }
+    };
 
-      } catch (e) {
-        console.error("Error fetching hives:", e.message);
-        // El mensaje de error es crucial para el usuario
-        setError("Error al cargar la lista de colmenas. Verifique la política RLS de la tabla 'hives' (debe permitir SELECT al rol 'public').");
-        setHives([]);
-      } finally {
-        setLoading(false);
-      }
-    }
-    
-    fetchHives();
-  }, [supabase]);
 
-  if (loading) return <div className="loading-state">Cargando dashboard y colmenas...</div>;
-  if (error) return <div className="error-state">{error}</div>;
-  if (hives.length === 0) return <div className="empty-state">No hay colmenas registradas. ¡Añade una en el panel de administración!</div>;
+    return (
+        <div className="container">
+            <Head>
+                <title>Apiario Digital</title>
+            </Head>
 
-  return (
-    <div className="homepage-container">
-      
-      {/* 1. BARRA DE PRONÓSTICO SEMANAL */}
-      <WeatherBar />
-      
-      <h1>Apiario Digital - Estado en Vivo ({hives.length} Colmena(s) Registrada(s))</h1>
+            <header>
+                <h1>Monitoreo de Colmenas</h1>
+                <Link href="/login" className="login-link">
+                    Admin Login
+                </Link>
+            </header>
 
-      {/* 2. CUADRÍCULA DE COLMENAS */}
-      <div className="hive-grid">
-        {/* Usamos Array.isArray() para garantizar que 'hives' es un array antes de mapear. */}
-        {/* Verificamos que 'hive' no sea nulo antes de renderizar la tarjeta. */}
-        {Array.isArray(hives) && hives.map((hive) => (
-          hive && (
-            <HiveCard 
-              key={hive.hive_unique_id} 
-              hiveId={hive.hive_unique_id}     // ID técnica (ej. colmena_alfa_001)
-              hiveName={hive.name}            // Nombre amigable (ej. Colmena Principal)
-              hiveLocation={hive.location}    // Ubicación
-            />
-          )
-        ))}
-      </div>
+            {loading && <p className="status-message">Cargando datos del apiario...</p>}
+            {error && <p className="error-message">Error: {error}</p>}
 
-      <style jsx>{`
-        .homepage-container {
-          padding: 20px;
-          text-align: center;
-        }
-        .hive-grid {
-          display: grid;
-          grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-          gap: 20px;
-          margin-top: 30px;
-        }
-        .loading-state, .error-state, .empty-state {
-            padding: 50px;
-            font-size: 1.2em;
-            color: #555;
-        }
-        .error-state {
-            color: #c0392b; /* Rojo más fuerte para errores */
-            font-weight: bold;
-            background: #f7e6e4;
-            border-radius: 8px;
-            margin: 20px;
-            border: 1px solid #c0392b;
-        }
-      `}</style>
-    </div>
-  );
+            {!loading && hives.length === 0 && !error && (
+                <p className="status-message">No hay colmenas registradas. Vaya a Admin Login para agregar una.</p>
+            )}
+
+            <div className="hive-grid">
+                {hives.map((hive) => (
+                    <HiveCard 
+                        key={hive.hive_unique_id} 
+                        hive={hive} 
+                        latestData={hive.latestData} 
+                    />
+                ))}
+            </div>
+
+            <style jsx>{`
+                .container {
+                    padding: 40px 20px;
+                    max-width: 1200px;
+                    margin: 0 auto;
+                }
+                header {
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    margin-bottom: 50px;
+                    border-bottom: 2px solid #f39c12;
+                    padding-bottom: 15px;
+                }
+                h1 {
+                    color: #2c3e50;
+                    font-size: 2.5em;
+                }
+                .login-link {
+                    background-color: #3498db;
+                    color: white;
+                    padding: 10px 15px;
+                    border-radius: 5px;
+                    text-decoration: none;
+                    transition: background-color 0.2s;
+                }
+                .login-link:hover {
+                    background-color: #2980b9;
+                }
+                .status-message, .error-message {
+                    text-align: center;
+                    padding: 20px;
+                    margin-top: 30px;
+                    border-radius: 8px;
+                    font-size: 1.1em;
+                }
+                .error-message {
+                    background-color: #fdd;
+                    color: #c0392b;
+                }
+                .hive-grid {
+                    display: grid;
+                    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+                    gap: 30px;
+                }
+            `}</style>
+        </div>
+    );
 }
