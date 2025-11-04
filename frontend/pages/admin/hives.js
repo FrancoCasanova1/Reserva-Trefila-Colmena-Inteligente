@@ -1,37 +1,42 @@
-// /frontend/pages/admin/hives.js - Versión Corregida con useCallback
+// /frontend/pages/admin/hives.js
 
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/router';
 import Head from 'next/head';
 // Importamos useUser y useSupabaseClient
 import { useUser, useSupabaseClient } from '@supabase/auth-helpers-react';
+
+// Importaciones corregidas y explícitas
 import HiveAdminCard from '../../components/Admin/HiveAdminCard.jsx'; 
-import AdminLayout from '../../components/Layout/AdminLayout.jsx';
+import AdminLayout from '../../components/Layout/AdminLayout.jsx'; 
 
 export default function AdminHivesPage() {
     const supabase = useSupabaseClient();
     const router = useRouter();
-    // Usamos 'isLoading' para un manejo de autenticación más robusto
-    const { user, isLoading: isAuthLoading } = useUser();
+
+    // 🚨 CORRECCIÓN CLAVE 1: Desestructuración Segura
+    // Si useUser() devuelve null (durante el prerender), desestructura de un objeto vacío {}
+    const { user, isLoading: isAuthLoading } = useUser() || {}; 
 
     // Estado local para los datos
     const [hives, setHives] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
 
-    // 🚨 CORRECCIÓN CLAVE 🚨
-    // Usamos useCallback para memoizar (estabilizar) la función fetchHives.
+    // 🚨 CORRECCIÓN CLAVE 2: Usar useCallback para estabilizar la función y evitar bucles
     const fetchHives = useCallback(async () => {
+        // Solo intenta hacer fetch si user existe (lo que ya se verifica en useEffect)
+        if (!user) return;
+        
         setLoading(true);
         setError(null);
-        // console.log("Iniciando fetchHives..."); // Puedes dejar los logs si lo deseas
 
         try {
-            // Asumimos que la tabla 'hives' tiene una columna 'user_id' para RLS
+            // Filtrar las colmenas solo para el usuario actual (RLS)
             const { data, error } = await supabase
                 .from('hives')
                 .select('*')
-                .eq('user_id', user.id) // Filtramos por el usuario actual
+                .eq('user_id', user.id) // Filtrar por el ID del usuario
                 .order('created_at', { ascending: false }); 
 
             if (error) {
@@ -39,30 +44,33 @@ export default function AdminHivesPage() {
                  throw error;
             }
             setHives(data);
-            
+
         } catch (e) {
             console.error("Error Capturado en fetchHives:", e); 
+            // Mensaje claro para ayudar a diagnosticar RLS
             setError("Fallo al cargar datos. Verifique sus políticas RLS o la conexión.");
         } finally {
-            // console.log("fetchHives finalizado. Seteando loading a false.");
             setLoading(false); 
         }
     }, [supabase, user]); // Dependencias: el cliente Supabase y el objeto user
 
     // --- PROTECCIÓN & FETCH LOGIC ---
     useEffect(() => {
-        // 1. Esperar a que el estado de autenticación se resuelva
-        if (isAuthLoading || user === undefined) return;
+        // 1. Si isAuthLoading es undefined (inicio) o true, esperar
+        if (isAuthLoading === undefined || isAuthLoading) return;
 
         if (!user) {
-            // 2. Si no hay usuario, redirigir
+            // 2. Si no hay usuario, redirigir al login
             router.push('/login');
         } else {
-            // 3. Si hay usuario, llamar a la función de fetch estable
+            // 3. Si el usuario está presente, cargar las colmenas
             fetchHives();
         }
     }, [user, router, isAuthLoading, fetchHives]); // Agregamos fetchHives a las dependencias
 
+    // --- RENDERIZADO CONDICIONAL ---
+    
+    // 🚨 Priorizar el estado de autenticación y carga
     if (isAuthLoading || loading) {
         return (
             <AdminLayout>
@@ -102,8 +110,8 @@ export default function AdminHivesPage() {
                     {hives.map(hive => (
                         <HiveAdminCard 
                             key={hive.hive_unique_id}
-                            hive={hive} // Pasamos el objeto hive completo
-                            onDeleteSuccess={fetchHives} // Para recargar la lista después de borrar
+                            hive={hive} 
+                            onDeleteSuccess={fetchHives} 
                         />
                     ))}
                 </div>
