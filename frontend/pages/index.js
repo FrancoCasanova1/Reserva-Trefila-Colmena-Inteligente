@@ -7,12 +7,12 @@ import Head from 'next/head';
 
 // --- Nuevo Componente: Barra de Clima ---
 function WeatherBar({ weather }) {
-    if (!weather || !weather.main) {
-        // Si no hay datos o la estructura principal (main) falta, no mostrar nada o un mensaje.
-        if (weather) {
-            return <div className="weather-bar status">Cargando datos del clima...</div>;
-        }
-        return null;
+    // Si NO hay datos O si falta la propiedad principal (main),
+    // mostramos un mensaje de carga.
+    if (!weather || !weather.main || !weather.name) {
+        // Muestra el mensaje de carga solo si la variable weatherData ha sido tocada,
+        // pero no ha devuelto una respuesta completa.
+        return <div className="weather-bar status">Cargando datos del clima...</div>;
     }
 
     // Usamos el encadenamiento opcional para la desestructuración, aunque ya verificamos 'main' arriba.
