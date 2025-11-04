@@ -5,8 +5,8 @@ import { useRouter } from 'next/router';
 import Head from 'next/head';
 // Importamos useUser y useSupabaseClient
 import { useUser, useSupabaseClient } from '@supabase/auth-helpers-react';
-import HiveAdminCard from '../../components/Admin/HiveAdminCard.jsx'; 
-import AdminLayout from '../../components/Layout/AdminLayout.jsx';
+import HiveAdminCard from '@/components/Admin/HiveAdminCard.jsx'; 
+import AdminLayout from '@/components/Layout/AdminLayout.jsx';
 
 export default function AdminHivesPage() {
     const supabase = useSupabaseClient();
