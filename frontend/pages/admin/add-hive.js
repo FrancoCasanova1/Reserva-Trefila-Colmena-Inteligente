@@ -5,7 +5,7 @@ import { useRouter } from 'next/router';
 import Head from 'next/head';
 import { useUser, useSupabaseClient } from '@supabase/auth-helpers-react';
 
-import AdminLayout from '../../../components/Layout/AdminLayout'; // Ajusta la extensión o ruta si es necesario
+import AdminLayout from '../../components/Layout/AdminLayout'; // Ajusta la extensión o ruta si es necesario
 
 export default function AddHivePage() {
     const supabase = useSupabaseClient();
