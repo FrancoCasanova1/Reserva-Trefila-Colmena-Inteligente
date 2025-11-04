@@ -1,13 +1,64 @@
-// /frontend/pages/index.js
+// /frontend/pages/index.js (NUEVAMENTE REVISADO Y COMPLETO CON CLIMA)
 
 import { useState, useEffect } from 'react';
 import { useSupabaseClient } from '@supabase/auth-helpers-react';
 import Link from 'next/link';
 import Head from 'next/head';
 
-// --- Componente para la Tarjeta de Colmena (Mejorado) ---
+// --- Nuevo Componente: Barra de Clima ---
+function WeatherBar({ weather }) {
+    if (!weather) return null;
+
+    const { name, main, weather: weatherDetails } = weather;
+    const description = weatherDetails?.[0]?.description || 'Cargando...';
+    const iconCode = weatherDetails?.[0]?.icon;
+    const iconUrl = iconCode ? `https://openweathermap.org/img/wn/${iconCode}.png` : null;
+
+    return (
+        <div className="weather-bar">
+            {iconUrl && <img src={iconUrl} alt={description} className="weather-icon" />}
+            <span className="location-name">Clima en **{name}**:</span>
+            <span className="temp">{main.temp.toFixed(1)}°C</span>
+            <span className="details"> / {description} / Humedad: {main.humidity}%</span>
+            
+            <style jsx>{`
+                .weather-bar {
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    background-color: #ecf0f1;
+                    padding: 10px 20px;
+                    border-radius: 8px;
+                    margin-bottom: 30px;
+                    font-size: 1.1em;
+                    color: #2c3e50;
+                    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+                }
+                .weather-icon {
+                    width: 40px;
+                    height: 40px;
+                    margin-right: 10px;
+                }
+                .location-name {
+                    font-weight: 500;
+                    margin-right: 10px;
+                }
+                .temp {
+                    font-weight: bold;
+                    color: #e67e22;
+                }
+                .details {
+                    color: #7f8c8d;
+                    margin-left: 10px;
+                }
+            `}</style>
+        </div>
+    );
+}
+
+// --- Componente para la Tarjeta de Colmena ---
 function HiveCard({ hive, latestData }) {
-    // Determinar la clase para la ganancia de peso (verde para positivo, rojo para negativo)
+    // ... (El código de HiveCard sigue siendo el mismo que antes)
     const changeClass = latestData?.change > 0 
         ? 'gain' 
         : latestData?.change < 0 
@@ -84,13 +135,13 @@ function HiveCard({ hive, latestData }) {
                     font-weight: bold;
                 }
                 .change.gain {
-                    color: #27ae60; /* Verde */
+                    color: #27ae60; 
                 }
                 .change.loss {
-                    color: #e74c3c; /* Rojo */
+                    color: #e74c3c; 
                 }
                 .change.neutral {
-                    color: #3498db; /* Azul */
+                    color: #3498db;
                 }
                 .view-button {
                     display: block;
@@ -117,7 +168,34 @@ export default function Home() {
     const [hives, setHives] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
+    // Nuevo estado para el clima
+    const [weatherData, setWeatherData] = useState(null);
 
+    // Efecto para obtener el clima
+    useEffect(() => {
+        const fetchWeatherData = async () => {
+            try {
+                // Llama a nuestra API de Next.js
+                const res = await fetch('/api/weather');
+                if (!res.ok) throw new Error('Error al conectar con el servidor del clima.');
+                
+                const data = await res.json();
+                setWeatherData(data);
+
+            } catch (e) {
+                console.error("Fallo al obtener el clima:", e);
+                // No establecemos error general, solo ignoramos si el clima falla
+            }
+        };
+
+        fetchWeatherData();
+        // Opcional: Recargar el clima cada hora
+        const intervalId = setInterval(fetchWeatherData, 3600000); 
+
+        return () => clearInterval(intervalId); // Limpiar en el desmontaje
+    }, []);
+
+    // Efecto para obtener las colmenas y sus datos de peso
     useEffect(() => {
         fetchHives();
     }, []);
@@ -126,7 +204,7 @@ export default function Home() {
         setLoading(true);
         setError(null);
         try {
-            // 1. Obtener la lista de colmenas
+            // ... (Lógica para obtener colmenas y RPC de peso) ...
             const { data: hiveList, error: hiveError } = await supabase
                 .from('hives')
                 .select('hive_unique_id, name, location')
@@ -134,19 +212,13 @@ export default function Home() {
 
             if (hiveError) throw hiveError;
 
-            // 2. Obtener datos analíticos (peso) para cada colmena usando la RPC
             const hivesWithData = await Promise.all(
                 hiveList.map(async (hive) => {
-                    // Llamar a la función SQL de Supabase (get_daily_weight_change)
                     const { data: rpcData, error: rpcError } = await supabase.rpc('get_daily_weight_change', { hive_id: hive.hive_unique_id });
-
+                    
                     if (rpcError) {
-                        console.error(`Error fetching weight change for ${hive.hive_unique_id}:`, rpcError);
-                        // Devolver datos nulos para que la tarjeta no falle
                         return { ...hive, latestData: { change: null, latest_weight: null } };
                     }
-                    
-                    // rpcData es un objeto JSON: { change: X, latest_weight: Y }
                     return { ...hive, latestData: rpcData };
                 })
             );
@@ -175,6 +247,9 @@ export default function Home() {
                 </Link>
             </header>
 
+            {/* BARRA DE CLIMA REINTRODUCIDA */}
+            <WeatherBar weather={weatherData} />
+
             {loading && <p className="status-message">Cargando datos del apiario...</p>}
             {error && <p className="error-message">Error: {error}</p>}
 
@@ -202,7 +277,7 @@ export default function Home() {
                     display: flex;
                     justify-content: space-between;
                     align-items: center;
-                    margin-bottom: 50px;
+                    margin-bottom: 30px; /* Reducido para dejar espacio a la barra de clima */
                     border-bottom: 2px solid #f39c12;
                     padding-bottom: 15px;
                 }
