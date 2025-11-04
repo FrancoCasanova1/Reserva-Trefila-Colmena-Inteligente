@@ -5,7 +5,8 @@ import { useSupabaseClient, useUser } from '@supabase/auth-helpers-react';
 import { useRouter } from 'next/router';
 import Head from 'next/head';
 import Link from 'next/link';
-import AddHiveForm from '../../components/admin/AddHiveForm'; // Asegúrate que esta ruta sea correcta
+// Después (usando alias):
+import AddHiveForm from '@components/admin/AddHiveForm';
 
 export default function AdminHivesPage() {
     const supabase = useSupabaseClient();
