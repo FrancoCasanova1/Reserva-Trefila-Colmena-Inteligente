@@ -7,10 +7,19 @@ import Head from 'next/head';
 
 // --- Nuevo Componente: Barra de Clima ---
 function WeatherBar({ weather }) {
-    if (!weather) return null;
+    if (!weather || !weather.main) {
+        // Si no hay datos o la estructura principal (main) falta, no mostrar nada o un mensaje.
+        if (weather) {
+            return <div className="weather-bar status">Cargando datos del clima...</div>;
+        }
+        return null;
+    }
 
+    // Usamos el encadenamiento opcional para la desestructuración, aunque ya verificamos 'main' arriba.
     const { name, main, weather: weatherDetails } = weather;
-    const description = weatherDetails?.[0]?.description || 'Cargando...';
+    
+    // Usamos encadenamiento opcional para manejar casos donde weatherDetails es vacío o null
+    const description = weatherDetails?.[0]?.description || 'Datos no disponibles'; 
     const iconCode = weatherDetails?.[0]?.icon;
     const iconUrl = iconCode ? `https://openweathermap.org/img/wn/${iconCode}.png` : null;
 
@@ -18,8 +27,13 @@ function WeatherBar({ weather }) {
         <div className="weather-bar">
             {iconUrl && <img src={iconUrl} alt={description} className="weather-icon" />}
             <span className="location-name">Clima en **{name}**:</span>
-            <span className="temp">{main.temp.toFixed(1)}°C</span>
-            <span className="details"> / {description} / Humedad: {main.humidity}%</span>
+            <span className="temp">
+                {/* CRÍTICO: Usar el encadenamiento opcional y verificar el valor */}
+                {main?.temp ? `${main.temp.toFixed(1)}°C` : 'N/A'}
+            </span>
+            <span className="details"> 
+                / {description} / Humedad: {main?.humidity ? `${main.humidity}%` : 'N/A'}
+            </span>
             
             <style jsx>{`
                 .weather-bar {
@@ -33,6 +47,10 @@ function WeatherBar({ weather }) {
                     font-size: 1.1em;
                     color: #2c3e50;
                     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+                }
+                .weather-bar.status {
+                    background-color: #fcf8e3;
+                    color: #8a6d3b;
                 }
                 .weather-icon {
                     width: 40px;
