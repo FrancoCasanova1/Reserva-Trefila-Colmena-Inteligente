@@ -30,6 +30,12 @@ export default function AdminHivesPage() {
         console.log("LOG: User ID Autenticado (Transitorio): undefined"); 
     }
 
+    if (user && user.id) {
+        console.log("LOG: User ID Autenticado (FINAL):", user.id); 
+    } else {
+        console.log("LOG: User ID Autenticado (Esperando...):", user); 
+    }
+
     // Estados
     const [hives, setHives] = useState([]);
     // 🚨 CORRECCIÓN CLAVE: Inicializamos loading en FALSE. Solo se activa al iniciar el fetch.
