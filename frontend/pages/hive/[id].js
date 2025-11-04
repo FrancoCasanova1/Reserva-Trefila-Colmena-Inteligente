@@ -1,15 +1,15 @@
-// /frontend/pages/hive/[id].js
-import { useState, useEffect, useMemo } from 'react'; // Agregamos useMemo
+// /frontend/pages/hive/[id].js (Código Final con Filtros de Tiempo)
+
+import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/router';
 import { useSupabaseClient } from '@supabase/auth-helpers-react';
-import Link from 'next/link'; // Importamos Link para navegación
+import Link from 'next/link';
 // Librerías de gráficos
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 
-// Componente para formatear el tooltip (Mejora: maneja el orden de tiempo)
+// --- Componente de Tooltip Mejorado ---
 const CustomTooltip = ({ active, payload, label, unit }) => {
     if (active && payload && payload.length) {
-        // La etiqueta 'label' aquí es el timestamp (created_at)
         const date = new Date(label);
         const formattedLabel = date.toLocaleString('es-AR', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' });
 
@@ -27,7 +27,7 @@ const CustomTooltip = ({ active, payload, label, unit }) => {
     return null;
 };
 
-// Componente para visualizar un gráfico
+// --- Componente para visualizar un gráfico ---
 const CustomChart = ({ data, dataKey, name, color, unit }) => (
     <div className="chart-container">
         <h3>{name} Histórico</h3>
@@ -40,48 +40,35 @@ const CustomChart = ({ data, dataKey, name, color, unit }) => (
                 />
                 <YAxis unit={unit} domain={['auto', 'auto']} />
                 
-                {/* Usamos el componente de Tooltip mejorado */}
-                <Tooltip 
-                    content={<CustomTooltip unit={unit} />}
-                />
+                <Tooltip content={<CustomTooltip unit={unit} />} />
                 
                 <Legend />
                 <Line type="monotone" dataKey={dataKey} stroke={color} name={name} dot={false} strokeWidth={2} />
             </LineChart>
         </ResponsiveContainer>
-        <style jsx>{`
-             .chart-container {
-               margin-bottom: 40px;
-               background: #fff;
-               padding: 20px;
-               border-radius: 8px;
-               box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
-             }
-             :global(.custom-tooltip) {
-                background: #fff;
-                border: 1px solid #ccc;
-                padding: 10px;
-                box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-             }
-             :global(.custom-tooltip .label) {
-                margin-bottom: 5px;
-                font-weight: bold;
-             }
-        `}</style>
     </div>
 );
 
 
 export default function HiveDetailPage() {
     const router = useRouter();
-    // CRÍTICO: El nombre de la variable aquí DEBE ser 'id' si el archivo es [id].js
-    const { id: hive_unique_id } = router.query; 
+    const { id: hive_unique_id } = router.query;
     const supabase = useSupabaseClient();
     
     const [hiveName, setHiveName] = useState('Cargando nombre...');
     const [sensorData, setSensorData] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
+    // Nuevo estado para el filtro (días)
+    const [timeFilter, setTimeFilter] = useState(1); // 1 día por defecto
+
+    // Función para obtener la fecha de inicio del rango
+    const getStartTime = (days) => {
+        const date = new Date();
+        date.setDate(date.getDate() - days);
+        // Formato ISO 8601 requerido por Supabase
+        return date.toISOString(); 
+    };
 
     useEffect(() => {
         if (!hive_unique_id) return;
@@ -90,29 +77,31 @@ export default function HiveDetailPage() {
             setLoading(true);
             setError(null);
 
+            // Calcula la fecha mínima de las lecturas basadas en el filtro
+            const startTime = getStartTime(timeFilter);
+            
             try {
-                // 1. OBTENER NOMBRE AMIGABLE DESDE LA TABLA 'hives'
-                const { data: hiveData, error: hiveError } = await supabase
+                // 1. Obtener nombre amigable (no depende del filtro)
+                const { data: hiveData } = await supabase
                     .from('hives')
                     .select('name')
                     .eq('hive_unique_id', hive_unique_id)
                     .single(); 
-
-                if (hiveError && hiveError.code !== 'PGRST116') throw hiveError; // Ignorar "no rows found" inicialmente
                 
                 if (hiveData && hiveData.name) {
                     setHiveName(hiveData.name);
                 } else {
-                    setHiveName(`Colmena: ${hive_unique_id}`); // Usa el ID si no hay nombre registrado
+                    setHiveName(`Colmena: ${hive_unique_id}`);
                 }
 
-                // 2. OBTENER DATOS DE SENSORES DESDE LA TABLA 'sensor_data'
+                // 2. Obtener datos de sensores filtrados por tiempo
                 const { data: sensorRows, error: sensorError } = await supabase
                     .from('sensor_data')
                     .select('created_at, temperature, humidity, weight, sound_level')
                     .eq('hive_unique_id', hive_unique_id)
-                    .order('created_at', { ascending: false }) 
-                    .limit(100); 
+                    // CRÍTICO: Filtro para obtener solo datos posteriores a 'startTime'
+                    .gte('created_at', startTime) 
+                    .order('created_at', { ascending: false }); 
 
                 if (sensorError) throw sensorError;
 
@@ -129,45 +118,72 @@ export default function HiveDetailPage() {
             }
         }
 
-        fetchData();
-    }, [hive_unique_id, supabase]);
+        // Se ejecuta cada vez que cambia el ID o el filtro de tiempo
+        fetchData(); 
+    }, [hive_unique_id, timeFilter, supabase]); // Añadimos timeFilter a las dependencias
 
     // Resumen de estado actual (calculado solo cuando sensorData cambia)
     const latestData = useMemo(() => sensorData.length > 0 ? sensorData[sensorData.length - 1] : null, [sensorData]);
 
     if (loading) return <div className="loading-state">Cargando historial de {hive_unique_id}...</div>;
     if (error) return <div className="error-state">{error}</div>;
-    if (!latestData) return (
+    if (!latestData && sensorData.length === 0) return (
          <div className="empty-state">
             <Link href="/" className="back-link">&larr; Volver al Dashboard</Link>
             <h2>Colmena: {hiveName}</h2>
-            <p>**No hay datos históricos** registrados en la tabla `sensor_data` para esta colmena.</p>
+            <p>**No hay datos históricos** registrados en el rango seleccionado ({timeFilter} día(s)).</p>
         </div>
     );
     
+    // Opciones de filtro
+    const filterOptions = [
+        { label: 'Últimas 24h', value: 1 },
+        { label: 'Últimos 7 días', value: 7 },
+        { label: 'Últimos 30 días', value: 30 },
+    ];
+
     return (
         <div className="detail-container">
             <header>
                 <button onClick={() => router.push('/')} className="back-button">&larr; Volver al Dashboard</button>
                 <h2>Historial de: {hiveName}</h2>
-                <p className="latest-reading">Última Lectura: {new Date(latestData.created_at).toLocaleString('es-AR')}</p>
+                <p className="latest-reading">Última Lectura: {latestData ? new Date(latestData.created_at).toLocaleString('es-AR') : 'N/A'}</p>
             </header>
 
-            {/* 1. Resumen de Estado Actual */}
-            <div className="summary-cards">
-                <div className="card temp-card">🌡️ Temp: <span>{latestData.temperature.toFixed(1)}°C</span></div>
-                <div className="card hum-card">💧 Hum: <span>{latestData.humidity.toFixed(1)}%</span></div>
-                <div className="card weight-card">⚖️ Peso: <span>{latestData.weight.toFixed(2)} kg</span></div>
+            {/* Selector de Filtro de Tiempo */}
+            <div className="filter-controls">
+                {filterOptions.map(option => (
+                    <button
+                        key={option.value}
+                        onClick={() => setTimeFilter(option.value)}
+                        className={timeFilter === option.value ? 'active' : ''}
+                        disabled={loading}
+                    >
+                        {option.label}
+                    </button>
+                ))}
             </div>
 
+            {/* 1. Resumen de Estado Actual */}
+            {latestData && (
+                <div className="summary-cards">
+                    <div className="card temp-card">🌡️ Temp: <span>{latestData.temperature.toFixed(1)}°C</span></div>
+                    <div className="card hum-card">💧 Hum: <span>{latestData.humidity.toFixed(1)}%</span></div>
+                    <div className="card weight-card">⚖️ Peso: <span>{latestData.weight.toFixed(2)} kg</span></div>
+                </div>
+            )}
+
             {/* 2. Gráficos Históricos */}
-            <div className="charts-grid">
-                <CustomChart data={sensorData} dataKey="weight" name="Peso (kg)" color="#e59400" unit="kg" />
-                <CustomChart data={sensorData} dataKey="temperature" name="Temperatura (°C)" color="#ff7300" unit="°C" />
-                <CustomChart data={sensorData} dataKey="humidity" name="Humedad (%)" color="#3879ff" unit="%" />
-            </div>
+            {sensorData.length > 0 && (
+                <div className="charts-grid">
+                    <CustomChart data={sensorData} dataKey="weight" name="Peso (kg)" color="#e59400" unit="kg" />
+                    <CustomChart data={sensorData} dataKey="temperature" name="Temperatura (°C)" color="#ff7300" unit="°C" />
+                    <CustomChart data={sensorData} dataKey="humidity" name="Humedad (%)" color="#3879ff" unit="%" />
+                </div>
+            )}
             
             <style jsx global>{`
+                /* Estilos globales y de estado */
                 .loading-state, .error-state, .empty-state {
                     text-align: center;
                     padding: 50px;
@@ -186,6 +202,7 @@ export default function HiveDetailPage() {
                 }
             `}</style>
             <style jsx>{`
+                /* Estilos específicos de la página */
                 .detail-container {
                     padding: 40px;
                     max-width: 1200px;
@@ -193,15 +210,7 @@ export default function HiveDetailPage() {
                 }
                 header {
                     text-align: center;
-                    margin-bottom: 40px;
-                }
-                header h2 {
-                    font-size: 2.5em;
-                    color: #333;
-                    margin-bottom: 5px;
-                }
-                .latest-reading {
-                    color: #888;
+                    margin-bottom: 20px;
                 }
                 .back-button {
                     position: absolute;
@@ -213,6 +222,34 @@ export default function HiveDetailPage() {
                     border: none;
                     border-radius: 5px;
                     cursor: pointer;
+                    transition: background-color 0.2s;
+                }
+                .back-button:hover {
+                    background-color: #2980b9;
+                }
+                .filter-controls {
+                    text-align: center;
+                    margin-bottom: 40px;
+                    padding-bottom: 10px;
+                    border-bottom: 1px solid #eee;
+                }
+                .filter-controls button {
+                    padding: 10px 15px;
+                    margin: 0 5px;
+                    border: 1px solid #ccc;
+                    border-radius: 5px;
+                    background-color: #f0f0f0;
+                    cursor: pointer;
+                    transition: background-color 0.2s, border-color 0.2s;
+                }
+                .filter-controls button.active {
+                    background-color: #f39c12;
+                    color: white;
+                    border-color: #f39c12;
+                    font-weight: bold;
+                }
+                .filter-controls button:hover:not(.active) {
+                    background-color: #e0e0e0;
                 }
                 .summary-cards {
                     display: flex;
