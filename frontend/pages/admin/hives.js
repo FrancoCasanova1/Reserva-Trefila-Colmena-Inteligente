@@ -24,8 +24,12 @@ export default function AdminHivesPage() {
     // El hook useUser ya tiene la sesión gracias a initialSession inyectada por SSR.
     const { user } = useUser() || {}; 
 
-    console.log("LOG: User ID Autenticado:", user?.id);
-    
+    if (user) {
+        console.log("LOG: User ID Autenticado (CORRECTO):", user.id); 
+    } else {
+        console.log("LOG: User ID Autenticado (Transitorio): undefined"); 
+    }
+
     // Estados
     const [hives, setHives] = useState([]);
     // 🚨 CORRECCIÓN CLAVE: Inicializamos loading en FALSE. Solo se activa al iniciar el fetch.
