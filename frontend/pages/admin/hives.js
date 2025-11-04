@@ -6,7 +6,7 @@ import { useRouter } from 'next/router';
 import Head from 'next/head';
 import Link from 'next/link';
 // Después (usando alias):
-import AddHiveForm from '../../components/admin/AddHiveForm';
+import AddHiveForm from '../../components/Admin/AddHiveForm';
 
 export default function AdminHivesPage() {
     const supabase = useSupabaseClient();
