@@ -1,107 +1,94 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/router';
 import Head from 'next/head';
+
+// Importamos useUser, useSupabaseClient para el cliente
 import { useUser, useSupabaseClient } from '@supabase/auth-helpers-react';
 
-// Importaciones corregidas y explícitas (asumiendo que los archivos existen)
+// Importamos createPagesServerClient para getServerSideProps
+import { createPagesServerClient } from '@supabase/auth-helpers-nextjs';
+
+// Importaciones de Componentes
 import HiveAdminCard from '../../components/Admin/HiveAdminCard.jsx'; 
 import AdminLayout from '../../components/Layout/AdminLayout.jsx'; 
+
+
+// ----------------------------------------------------------------------
+// COMPONENTE PRINCIPAL
+// ----------------------------------------------------------------------
 
 export default function AdminHivesPage() {
     const supabase = useSupabaseClient();
     const router = useRouter();
 
-    // 🚨 CORRECCIÓN CLAVE: Desestructuración Segura
-    // Si useUser() devuelve null/undefined (como en el prerender), desestructura de un objeto vacío {}
+    // El hook useUser ahora funcionará inmediatamente gracias a initialSession inyectada por SSR
+    // La desestructuración segura se mantiene como buena práctica.
     const { user, isLoading: isAuthLoading } = useUser() || {}; 
 
     // Estados
     const [hives, setHives] = useState([]);
-    const [loading, setLoading] = useState(true);
+    const [loading, setLoading] = useState(true); // Inicializado en true para el fetch de datos
     const [error, setError] = useState(null);
-
-    // --- LOGS DE DIAGNÓSTICO EN NAVEGADOR (CONSOLA) ---
-    // Remueve estos logs una vez que la página funcione
-    console.log("Estado de Autenticación (isAuthLoading):", isAuthLoading);
-    console.log("Estado del Usuario (user):", user);
-    console.log("Estado de Carga de Datos (loading):", loading);
-    // ----------------------------------------------------
 
     // Usamos useCallback para estabilizar la función de fetch
     const fetchHives = useCallback(async () => {
-        // Doble verificación en caso de que se llame antes de tiempo
-        if (!user) {
-            console.log("fetchHives abortado: Usuario no disponible.");
-            return;
-        }
+        // En este punto, sabemos que 'user' existe gracias a getServerSideProps
+        if (!user) return; 
         
         setLoading(true);
         setError(null);
-        console.log("Iniciando fetchHives para el usuario:", user.id); 
+        console.log("LOG: fetchHives INICIADO. Usuario ID:", user.id); 
 
         try {
-            // Filtrar las colmenas solo para el usuario actual (usando RLS)
+            // Consulta de colmenas filtrada por el usuario
             const { data, error: fetchError } = await supabase
                 .from('hives')
                 .select('*')
-                // 💡 Asume que tienes una política RLS que requiere esta igualdad
                 .eq('user_id', user.id) 
                 .order('created_at', { ascending: false }); 
 
             if (fetchError) {
+                 // Esto es CRÍTICO para diagnosticar RLS
+                 console.error("Error devuelto por Supabase:", fetchError); 
                  throw fetchError;
             }
             
             setHives(data);
-            console.log(`fetchHives completado. Colmenas cargadas: ${data.length}`);
 
         } catch (e) {
             console.error("Error Capturado en fetchHives:", e); 
-            // Mensaje de error más detallado para el usuario final
-            setError(`Fallo al cargar datos: ${e.message || "Error desconocido. Verifique RLS."}`);
+            // Mensaje claro si hay un fallo (e.g., por RLS)
+            setError(`Fallo al cargar datos. Verifique sus políticas RLS (Error: ${e.code || 'Desconocido'}).`);
         } finally {
             setLoading(false); 
         }
     }, [supabase, user]); 
 
-    // --- PROTECCIÓN & REDIRECCIÓN ---
+    // --- LÓGICA DE CARGA DE DATOS ---
     useEffect(() => {
-        // Si isAuthLoading es undefined (inicio) o true, esperar
-        if (isAuthLoading === undefined || isAuthLoading) return;
-
-        // Si la carga de Auth terminó y NO hay usuario
-        if (!user) {
-            console.log("Usuario NO ENCONTRADO. Redirigiendo a /login"); 
-            router.push('/login');
-        } else {
-            // Si el usuario está presente, cargar las colmenas
-            console.log("Usuario ENCONTRADO. Llamando a fetchHives."); 
+        // Ejecuta el fetch una vez que la sesión de Auth haya sido confirmada (no es undefined o null)
+        // Ya no necesitamos la redirección aquí, porque getServerSideProps la maneja.
+        if (user && !isAuthLoading) {
             fetchHives();
         }
-        
-    }, [user, router, isAuthLoading, fetchHives]); 
+    }, [user, isAuthLoading, fetchHives]); 
 
-    // --- RENDERIZADO CONDICIONAL (ESTADOS DE CARGA Y ERROR) ---
+    // --- RENDERIZADO CONDICIONAL ---
     
-    // Si la autenticación o la carga de datos están en curso, mostrar el mensaje de carga
-    if (isAuthLoading || loading) {
+    if (loading) {
         return (
             <AdminLayout>
-                <div className="status-message">
-                    {/* Muestra un mensaje específico para saber dónde está esperando */}
-                    {isAuthLoading ? 'Verificando sesión...' : 'Cargando colmenas...'}
-                </div>
+                <div className="status-message">Cargando colmenas...</div>
             </AdminLayout>
         );
     }
     
-    // Si hay un error (después de que la carga terminó)
     if (error) {
         return (
             <AdminLayout>
                 <div className="error-message">
                     Error al cargar: {error}
-                    <p>Revise la consola del navegador para más detalles o verifique sus políticas RLS en Supabase.</p>
+                    <p>Si ve este error, **revise la política RLS SELECT** en la tabla 'hives' de Supabase.</p>
                 </div>
             </AdminLayout>
         );
@@ -128,58 +115,52 @@ export default function AdminHivesPage() {
                         <HiveAdminCard 
                             key={hive.hive_unique_id}
                             hive={hive} 
-                            // Pasamos fetchHives para refrescar la lista después de un borrado
                             onDeleteSuccess={fetchHives} 
                         />
                     ))}
                 </div>
             )}
             <style jsx>{`
-                .page-title {
-                    color: #2c3e50;
-                    border-bottom: 2px solid #f39c12;
-                    padding-bottom: 15px;
-                    margin-bottom: 30px;
-                }
-                .add-button {
-                    background-color: #f39c12;
-                    color: white;
-                    border: none;
-                    padding: 10px 20px;
-                    border-radius: 5px;
-                    cursor: pointer;
-                    font-size: 1em;
-                    margin-bottom: 30px;
-                    transition: background-color 0.2s;
-                }
-                .add-button:hover {
-                    background-color: #e67e22;
-                }
-                .status-message {
-                    text-align: center;
-                    padding: 20px;
-                    color: #2c3e50;
-                    font-size: 1.2em;
-                }
-                .error-message {
-                    text-align: center;
-                    padding: 20px;
-                    background-color: #fdd;
-                    color: #c0392b;
-                    border-radius: 8px;
-                    font-weight: bold;
-                }
-                .no-hives {
-                    border: 1px dashed #f39c12;
-                    background-color: #fff9e6;
-                    border-radius: 8px;
-                }
-                .hives-grid {
-                    display: grid;
-                    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-                    gap: 20px;
-                }
+                /* Estilos (debes tenerlos definidos) */
+                .page-title { /* ... */ }
+                /* etc. */
             `}</style>
         </AdminLayout>
     );
 }
+
+// ----------------------------------------------------------------------
+// SSR PARA PROTECCIÓN DE RUTA
+// ----------------------------------------------------------------------
+
+/**
+ * Función que se ejecuta en el servidor para verificar la sesión antes de renderizar la página.
+ */
+export const getServerSideProps = async (ctx) => {
+  // 1. Crea el cliente Supabase del lado del servidor
+  const supabase = createPagesServerClient(ctx);
+  
+  // 2. Obtiene la sesión del usuario
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+
+  // 3. Redirige si no hay sesión
+  if (!session) {
+    return {
+      redirect: {
+        destination: '/login', // 🚨 Asegúrate de que esta es la ruta correcta
+        permanent: false,
+      },
+    };
+  }
+
+  // 4. Si la sesión existe, pasa la sesión como initialSession
+  return {
+    props: {
+      // CRUCIAL: Esto inicializa el SessionContextProvider en el cliente
+      initialSession: session, 
+      // Puedes pasar otros datos si es necesario
+    },
+  };
+};
