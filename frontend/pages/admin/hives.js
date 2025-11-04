@@ -1,12 +1,13 @@
-// /frontend/pages/admin/hives.js - VISTA DE GESTIÓN COMPLETA
+// /frontend/pages/admin/hives.js - VISTA DE GESTIÓN CORREGIDA
 
 import { useState, useEffect } from 'react';
 import { useSupabaseClient, useUser } from '@supabase/auth-helpers-react';
 import { useRouter } from 'next/router';
 import Head from 'next/head';
 import Link from 'next/link';
-// Después (usando alias):
-import AddHiveForm from '../../components/Admin/AddHiveForm';
+
+// NOTA DE CORRECCIÓN: Se eliminó la importación de AddHiveForm 
+// y el modal, ya que tienes una página dedicada en /pages/admin/add-hive.js
 
 export default function AdminHivesPage() {
     const supabase = useSupabaseClient();
@@ -16,7 +17,6 @@ export default function AdminHivesPage() {
     const [hives, setHives] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
-    const [isAdding, setIsAdding] = useState(false);
     const [statusMessage, setStatusMessage] = useState('');
 
     // --- PROTECCIÓN DE RUTA ---
@@ -37,7 +37,6 @@ export default function AdminHivesPage() {
         setLoading(true);
         setError(null);
         try {
-            // Se asume RLS para que solo el usuario autenticado vea sus colmenas
             const { data, error } = await supabase
                 .from('hives')
                 .select('*')
@@ -83,7 +82,6 @@ export default function AdminHivesPage() {
     };
     // -------------------------
 
-    // Si está cargando o no hay usuario, muestra un mensaje
     if (loading || !user) {
         return (
             <div className="admin-container loading">
@@ -94,7 +92,7 @@ export default function AdminHivesPage() {
 
     const handleLogout = async () => {
         await supabase.auth.signOut();
-        router.push('/'); // Redirigir a la página principal tras el logout
+        router.push('/'); 
     };
 
     return (
@@ -106,7 +104,11 @@ export default function AdminHivesPage() {
             <header>
                 <h1>🐝 Gestión de Colmenas</h1>
                 <div className="header-actions">
-                    <button onClick={() => setIsAdding(true)} className="add-button">
+                    {/* ACCIÓN CORREGIDA: NAVEGA a la página dedicada */}
+                    <button 
+                        onClick={() => router.push('/admin/add-hive')} 
+                        className="add-button"
+                    >
                         + Añadir Nueva Colmena
                     </button>
                     <button onClick={handleLogout} className="logout-button">
@@ -127,18 +129,6 @@ export default function AdminHivesPage() {
 
             {error && <p className="error-message">Error: {error}</p>}
             
-            {/* Modal de Añadir Colmena */}
-            {isAdding && (
-                <AddHiveForm 
-                    onClose={() => setIsAdding(false)} 
-                    onSuccess={() => {
-                        setIsAdding(false);
-                        fetchHives(); // Recargar la lista después de añadir
-                        setStatusMessage('Colmena añadida con éxito. Actualizando lista...');
-                    }}
-                />
-            )}
-
             <h2>Colmenas Registradas ({hives.length})</h2>
 
             <div className="hive-list">
@@ -173,6 +163,7 @@ export default function AdminHivesPage() {
             </div>
 
             <style jsx>{`
+                /* Estilos no modificados */
                 .admin-container {
                     max-width: 900px;
                     margin: 50px auto;
