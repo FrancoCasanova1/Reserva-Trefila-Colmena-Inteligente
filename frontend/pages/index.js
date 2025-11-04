@@ -1,81 +1,15 @@
-// /frontend/pages/index.js (NUEVAMENTE REVISADO Y COMPLETO CON CLIMA)
+// /frontend/pages/index.js
 
 import { useState, useEffect } from 'react';
 import { useSupabaseClient } from '@supabase/auth-helpers-react';
 import Link from 'next/link';
 import Head from 'next/head';
-
-// --- Nuevo Componente: Barra de Clima ---
-function WeatherBar({ weather }) {
-    // Si NO hay datos O si falta la propiedad principal (main),
-    // mostramos un mensaje de carga.
-    if (!weather || !weather.main || !weather.name) {
-        // Muestra el mensaje de carga solo si la variable weatherData ha sido tocada,
-        // pero no ha devuelto una respuesta completa.
-        return <div className="weather-bar status">Cargando datos del clima...</div>;
-    }
-
-    // Usamos el encadenamiento opcional para la desestructuración, aunque ya verificamos 'main' arriba.
-    const { name, main, weather: weatherDetails } = weather;
-    
-    // Usamos encadenamiento opcional para manejar casos donde weatherDetails es vacío o null
-    const description = weatherDetails?.[0]?.description || 'Datos no disponibles'; 
-    const iconCode = weatherDetails?.[0]?.icon;
-    const iconUrl = iconCode ? `https://openweathermap.org/img/wn/${iconCode}.png` : null;
-
-    return (
-        <div className="weather-bar">
-            {iconUrl && <img src={iconUrl} alt={description} className="weather-icon" />}
-            <span className="location-name">Clima en **{name}**:</span>
-            <span className="temp">
-                {main?.temp ? `${main.temp.toFixed(1)}°C` : 'N/A'}
-            </span>
-            <span className="details"> 
-                / {description} / Humedad: {main?.humidity ? `${main.humidity}%` : 'N/A'}
-            </span>
-            
-            <style jsx>{`
-                .weather-bar {
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
-                    background-color: #ecf0f1;
-                    padding: 10px 20px;
-                    border-radius: 8px;
-                    margin-bottom: 30px;
-                    font-size: 1.1em;
-                    color: #2c3e50;
-                    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
-                }
-                .weather-bar.status {
-                    background-color: #fcf8e3;
-                    color: #8a6d3b;
-                }
-                .weather-icon {
-                    width: 40px;
-                    height: 40px;
-                    margin-right: 10px;
-                }
-                .location-name {
-                    font-weight: 500;
-                    margin-right: 10px;
-                }
-                .temp {
-                    font-weight: bold;
-                    color: #e67e22;
-                }
-                .details {
-                    color: #7f8c8d;
-                    margin-left: 10px;
-                }
-            `}</style>
-        </div>
-    );
-}
+// Importar el componente WeatherBar desde su ubicación en components/Layout
+import WeatherBar from '../components/Layout/WeatherBar'; 
 
 // --- Componente para la Tarjeta de Colmena ---
 function HiveCard({ hive, latestData }) {
-    // ... (El código de HiveCard sigue siendo el mismo que antes)
+    // Lógica de cambio de peso
     const changeClass = latestData?.change > 0 
         ? 'gain' 
         : latestData?.change < 0 
@@ -185,34 +119,9 @@ export default function Home() {
     const [hives, setHives] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
-    // Nuevo estado para el clima
-    const [weatherData, setWeatherData] = useState(null);
+    
+    // NOTA: La lógica de clima (estado y useEffect) fue movida a WeatherBar.jsx
 
-    // Efecto para obtener el clima
-    useEffect(() => {
-        const fetchWeatherData = async () => {
-            try {
-                // Llama a nuestra API de Next.js
-                const res = await fetch('/api/weather');
-                if (!res.ok) throw new Error('Error al conectar con el servidor del clima.');
-                
-                const data = await res.json();
-                setWeatherData(data);
-
-            } catch (e) {
-                console.error("Fallo al obtener el clima:", e);
-                // No establecemos error general, solo ignoramos si el clima falla
-            }
-        };
-
-        fetchWeatherData();
-        // Opcional: Recargar el clima cada hora
-        const intervalId = setInterval(fetchWeatherData, 3600000); 
-
-        return () => clearInterval(intervalId); // Limpiar en el desmontaje
-    }, []);
-
-    // Efecto para obtener las colmenas y sus datos de peso
     useEffect(() => {
         fetchHives();
     }, []);
@@ -221,7 +130,7 @@ export default function Home() {
         setLoading(true);
         setError(null);
         try {
-            // ... (Lógica para obtener colmenas y RPC de peso) ...
+            // 1. Obtener la lista de colmenas
             const { data: hiveList, error: hiveError } = await supabase
                 .from('hives')
                 .select('hive_unique_id, name, location')
@@ -229,8 +138,10 @@ export default function Home() {
 
             if (hiveError) throw hiveError;
 
+            // 2. Obtener datos analíticos (peso) para cada colmena usando la RPC
             const hivesWithData = await Promise.all(
                 hiveList.map(async (hive) => {
+                    // Llamar a la función SQL de Supabase (get_daily_weight_change)
                     const { data: rpcData, error: rpcError } = await supabase.rpc('get_daily_weight_change', { hive_id: hive.hive_unique_id });
                     
                     if (rpcError) {
@@ -264,8 +175,8 @@ export default function Home() {
                 </Link>
             </header>
 
-            {/* BARRA DE CLIMA REINTRODUCIDA */}
-            <WeatherBar weather={weatherData} />
+            {/* Componente de Clima */}
+            <WeatherBar />
 
             {loading && <p className="status-message">Cargando datos del apiario...</p>}
             {error && <p className="error-message">Error: {error}</p>}
@@ -294,7 +205,7 @@ export default function Home() {
                     display: flex;
                     justify-content: space-between;
                     align-items: center;
-                    margin-bottom: 30px; /* Reducido para dejar espacio a la barra de clima */
+                    margin-bottom: 30px; 
                     border-bottom: 2px solid #f39c12;
                     padding-bottom: 15px;
                 }
