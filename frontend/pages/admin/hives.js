@@ -2,10 +2,10 @@ import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/router';
 import Head from 'next/head';
 
-// Importamos useUser, useSupabaseClient para el cliente
+// Importamos hooks de cliente
 import { useUser, useSupabaseClient } from '@supabase/auth-helpers-react';
 
-// Importamos createPagesServerClient para getServerSideProps
+// Importamos helpers de servidor para SSR
 import { createPagesServerClient } from '@supabase/auth-helpers-nextjs';
 
 // Importaciones de Componentes
@@ -14,20 +14,20 @@ import AdminLayout from '../../components/Layout/AdminLayout.jsx';
 
 
 // ----------------------------------------------------------------------
-// COMPONENTE PRINCIPAL
+// COMPONENTE PRINCIPAL (CLIENTE)
 // ----------------------------------------------------------------------
 
 export default function AdminHivesPage() {
     const supabase = useSupabaseClient();
     const router = useRouter();
 
-    // El hook useUser ahora funcionará inmediatamente gracias a initialSession inyectada por SSR
-    // La desestructuración segura se mantiene como buena práctica.
-    const { user, isLoading: isAuthLoading } = useUser() || {}; 
+    // El hook useUser ya tiene la sesión gracias a initialSession inyectada por SSR.
+    const { user } = useUser() || {}; 
 
     // Estados
     const [hives, setHives] = useState([]);
-    const [loading, setLoading] = useState(true); // Inicializado en true para el fetch de datos
+    // 🚨 CORRECCIÓN CLAVE: Inicializamos loading en FALSE. Solo se activa al iniciar el fetch.
+    const [loading, setLoading] = useState(false); 
     const [error, setError] = useState(null);
 
     // Usamos useCallback para estabilizar la función de fetch
@@ -35,12 +35,12 @@ export default function AdminHivesPage() {
         // En este punto, sabemos que 'user' existe gracias a getServerSideProps
         if (!user) return; 
         
-        setLoading(true);
+        // 🚨 Se activa loading JUSTO antes de la llamada de red
+        setLoading(true); 
         setError(null);
-        console.log("LOG: fetchHives INICIADO. Usuario ID:", user.id); 
+        console.log("LOG: 1. fetchHives INICIADO. Usuario ID:", user.id); 
 
         try {
-            // Consulta de colmenas filtrada por el usuario
             const { data, error: fetchError } = await supabase
                 .from('hives')
                 .select('*')
@@ -48,30 +48,33 @@ export default function AdminHivesPage() {
                 .order('created_at', { ascending: false }); 
 
             if (fetchError) {
-                 // Esto es CRÍTICO para diagnosticar RLS
-                 console.error("Error devuelto por Supabase:", fetchError); 
+                 console.error("LOG: ERROR en Supabase:", fetchError); 
                  throw fetchError;
             }
             
             setHives(data);
+            console.log(`LOG: 2. Datos cargados: ${data.length}`);
 
         } catch (e) {
-            console.error("Error Capturado en fetchHives:", e); 
-            // Mensaje claro si hay un fallo (e.g., por RLS)
-            setError(`Fallo al cargar datos. Verifique sus políticas RLS (Error: ${e.code || 'Desconocido'}).`);
+            console.error("LOG: 3. Error Capturado en fetchHives:", e); 
+            setError(`Fallo al cargar datos. Revise la política RLS. (Error: ${e.message || 'Desconocido'}).`);
         } finally {
+            // 🚨 Se desactiva loading SIEMPRE al final de la ejecución
             setLoading(false); 
+            console.log("LOG: 4. fetchHives FINALIZADO.");
         }
     }, [supabase, user]); 
 
     // --- LÓGICA DE CARGA DE DATOS ---
     useEffect(() => {
-        // Ejecuta el fetch una vez que la sesión de Auth haya sido confirmada (no es undefined o null)
-        // Ya no necesitamos la redirección aquí, porque getServerSideProps la maneja.
-        if (user && !isAuthLoading) {
+        // 🚨 CORRECCIÓN CLAVE: Si hay un usuario, iniciamos el fetch de datos.
+        // Esto elimina el chequeo complejo de isAuthLoading.
+        if (user) {
+            console.log("LOG: Usuario disponible. Iniciando fetchHives en useEffect.");
             fetchHives();
         }
-    }, [user, isAuthLoading, fetchHives]); 
+    // Añadimos solo user y fetchHives como dependencia
+    }, [user, fetchHives]); 
 
     // --- RENDERIZADO CONDICIONAL ---
     
@@ -88,7 +91,6 @@ export default function AdminHivesPage() {
             <AdminLayout>
                 <div className="error-message">
                     Error al cargar: {error}
-                    <p>Si ve este error, **revise la política RLS SELECT** en la tabla 'hives' de Supabase.</p>
                 </div>
             </AdminLayout>
         );
@@ -121,16 +123,18 @@ export default function AdminHivesPage() {
                 </div>
             )}
             <style jsx>{`
-                /* Estilos (debes tenerlos definidos) */
-                .page-title { /* ... */ }
-                /* etc. */
+                /* Estilos ... */
+                .status-message { text-align: center; padding: 20px; font-size: 1.2em; color: #2c3e50; }
+                .error-message { text-align: center; padding: 20px; background-color: #fdd; color: #c0392b; border-radius: 8px; font-weight: bold; }
+                .no-hives { border: 1px dashed #f39c12; background-color: #fff9e6; border-radius: 8px; }
+                /* ... otros estilos */
             `}</style>
         </AdminLayout>
     );
 }
 
 // ----------------------------------------------------------------------
-// SSR PARA PROTECCIÓN DE RUTA
+// SSR PARA PROTECCIÓN DE RUTA Y CARGA INICIAL DE SESIÓN (SERVIDOR)
 // ----------------------------------------------------------------------
 
 /**
@@ -149,7 +153,7 @@ export const getServerSideProps = async (ctx) => {
   if (!session) {
     return {
       redirect: {
-        destination: '/login', // 🚨 Asegúrate de que esta es la ruta correcta
+        destination: '/login', // Asegúrate de que esta es la ruta de login
         permanent: false,
       },
     };
@@ -160,7 +164,6 @@ export const getServerSideProps = async (ctx) => {
     props: {
       // CRUCIAL: Esto inicializa el SessionContextProvider en el cliente
       initialSession: session, 
-      // Puedes pasar otros datos si es necesario
     },
   };
 };
