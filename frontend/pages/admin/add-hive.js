@@ -1,217 +1,135 @@
 // /frontend/pages/admin/add-hive.js
 
-import { useState, useEffect } from 'react';
-import { useUser, useSupabaseClient } from '@supabase/auth-helpers-react';
+import { useState } from 'react';
 import { useRouter } from 'next/router';
-import Link from 'next/link';
+import Head from 'next/head';
+import { useUser, useSupabaseClient } from '@supabase/auth-helpers-react';
+
+import AdminLayout from '../../../components/Layout/AdminLayout.jsx';
 
 export default function AddHivePage() {
-    const user = useUser();
-    const router = useRouter();
     const supabase = useSupabaseClient();
+    const router = useRouter();
+    
+    // Obtener el usuario autenticado (requerido para la inserción)
+    const { user } = useUser() || {}; 
 
-    const [loading, setLoading] = useState(true);
-    const [hiveId, setHiveId] = useState('');
-    const [hiveName, setHiveName] = useState('');
-    const [hiveLocation, setHiveLocation] = useState('');
-    const [message, setMessage] = useState(null);
+    // Estados del formulario
+    const [name, setName] = useState('');
+    const [location, setLocation] = useState('');
+    const [isSubmitting, setIsSubmitting] = useState(false);
+    const [error, setError] = useState(null);
+    const [success, setSuccess] = useState(false);
 
-    // 1. Protección de ruta: Si no hay usuario, redirige a login
-    useEffect(() => {
-        if (!user) {
-            router.push('/login');
-        } else {
-            setLoading(false);
-        }
-    }, [user, router]);
+    // Si el usuario no está disponible, redirigimos. (Idealmente manejado por getServerSideProps)
+    if (!user) {
+        router.push('/login');
+        return null; 
+    }
 
-    // 2. Manejo del envío del formulario
     const handleSubmit = async (e) => {
         e.preventDefault();
-        setLoading(true);
-        setMessage(null);
-
-        // Limpieza básica del ID para asegurar compatibilidad con ESP32 (sin espacios)
-        const sanitizedHiveId = hiveId.trim().toLowerCase().replace(/\s+/g, '_');
         
-        if (!sanitizedHiveId) {
-            setMessage({ type: 'error', text: 'El ID único es obligatorio.' });
-            setLoading(false);
+        if (!name.trim() || !location.trim()) {
+            setError("El nombre y la ubicación son obligatorios.");
             return;
         }
 
+        setIsSubmitting(true);
+        setError(null);
+        setSuccess(false);
+
         try {
-            // Insertar la nueva colmena en la tabla 'hives'
-            const { error } = await supabase
+            const newHive = {
+                // 🔑 CLAVE: Asignamos el ID del usuario actual.
+                // Esto garantiza que la colmena pertenezca al usuario que la crea.
+                user_id: user.id, 
+                name: name.trim(),
+                location: location.trim(),
+                // Asegúrate de incluir aquí cualquier otro campo obligatorio de tu tabla 'hives'
+            };
+
+            const { data, error } = await supabase
                 .from('hives')
-                .insert([
-                    {
-                        hive_unique_id: sanitizedHiveId,
-                        name: hiveName.trim() || `Colmena ${sanitizedHiveId}`,
-                        location: hiveLocation.trim(),
-                        user_id: user.id, // Asigna el registro al usuario actual
-                    }
-                ]);
+                .insert([newHive])
+                .select(); // Usamos select() para confirmar la fila insertada
 
             if (error) {
-                // Manejar error de ID duplicado
-                if (error.code === '23505') { // Código de error de PostgreSQL para violación de clave única
-                    throw new Error(`Ya existe una colmena con el ID: ${sanitizedHiveId}.`);
-                }
+                console.error("Error de inserción de Supabase:", error);
                 throw error;
             }
 
-            setMessage({ type: 'success', text: `¡Colmena '${hiveName}' registrada exitosamente con ID: ${sanitizedHiveId}!` });
+            console.log("Colmena creada con éxito:", data);
+            setSuccess(true);
             
-            // Limpiar formulario para el siguiente registro
-            setHiveId('');
-            setHiveName('');
-            setHiveLocation('');
+            // Redirigir de vuelta a la lista de colmenas para que el usuario la vea
+            router.push('/admin/hives?created=true');
 
         } catch (e) {
-            console.error('Error al registrar colmena:', e);
-            setMessage({ type: 'error', text: e.message });
+            console.error("Error al guardar la colmena:", e);
+            setError(`Fallo al crear la colmena: ${e.message || 'Error desconocido.'} Revise sus políticas RLS INSERT.`);
         } finally {
-            setLoading(false);
+            setIsSubmitting(false);
         }
     };
 
-    if (loading) {
-        return (
-            <div className="admin-container loading">
-                <p>Cargando formulario...</p>
-            </div>
-        );
-    }
-
     return (
-        <div className="admin-container">
-            <header className="form-header">
-                <Link href="/admin/hives" className="back-link">
-                    &larr; Volver al Listado
-                </Link>
-                <h1>Registrar Nueva Colmena</h1>
-            </header>
+        <AdminLayout>
+            <Head>
+                <title>Añadir Colmena | Admin</title>
+            </Head>
 
-            <form onSubmit={handleSubmit} className="add-form">
+            <h1 className="page-title">🐝 Añadir Nueva Colmena</h1>
+            
+            <form onSubmit={handleSubmit} className="hive-form">
                 
-                <label>
-                    ID Único de la Colmena (Ej: colmena_alfa_001)
+                <div className="form-group">
+                    <label htmlFor="name">Nombre de la Colmena:</label>
                     <input
+                        id="name"
                         type="text"
-                        value={hiveId}
-                        onChange={(e) => setHiveId(e.target.value)}
-                        placeholder="Debe coincidir con HIVE_UNIQUE_ID del ESP32"
+                        value={name}
+                        onChange={(e) => setName(e.target.value)}
+                        placeholder="Ej: Colmena Jardín Sur"
+                        disabled={isSubmitting}
                         required
-                        disabled={loading}
                     />
-                </label>
-                
-                <label>
-                    Nombre de la Colmena
-                    <input
-                        type="text"
-                        value={hiveName}
-                        onChange={(e) => setHiveName(e.target.value)}
-                        placeholder="Colmena Alfa"
-                        disabled={loading}
-                    />
-                </label>
-                
-                <label>
-                    Ubicación / Apiario
-                    <input
-                        type="text"
-                        value={hiveLocation}
-                        onChange={(e) => setHiveLocation(e.target.value)}
-                        placeholder="Apiario Sur, Lote 3"
-                        disabled={loading}
-                    />
-                </label>
+                </div>
 
-                <button type="submit" disabled={loading}>
-                    {loading ? 'Registrando...' : 'Registrar Colmena'}
+                <div className="form-group">
+                    <label htmlFor="location">Ubicación / Descripción:</label>
+                    <input
+                        id="location"
+                        type="text"
+                        value={location}
+                        onChange={(e) => setLocation(e.target.value)}
+                        placeholder="Ej: Patio trasero, cerca del roble"
+                        disabled={isSubmitting}
+                        required
+                    />
+                </div>
+
+                {error && <p className="error-message">{error}</p>}
+                {success && <p className="success-message">¡Colmena creada con éxito!</p>}
+
+                <button type="submit" disabled={isSubmitting} className="submit-button">
+                    {isSubmitting ? 'Guardando...' : 'Crear Colmena'}
                 </button>
             </form>
 
-            {/* Mensaje de estado */}
-            {message && (
-                <div className={`message ${message.type}`}>
-                    {message.text}
-                </div>
-            )}
-            
+            {/* Estilos JSX (abreviados para concisión) */}
             <style jsx>{`
-                .admin-container {
-                    max-width: 600px;
-                    margin: 40px auto;
-                    padding: 30px;
-                    background-color: #fff;
-                    border-radius: 10px;
-                    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-                }
-                .form-header {
-                    margin-bottom: 25px;
-                    padding-bottom: 15px;
-                    border-bottom: 1px solid #eee;
-                }
-                .back-link {
-                    color: #3498db;
-                    text-decoration: none;
-                    margin-bottom: 15px;
-                    display: inline-block;
-                }
-                h1 {
-                    color: #2c3e50;
-                    font-size: 1.8em;
-                }
-                .add-form label {
-                    display: block;
-                    margin-bottom: 15px;
-                    font-weight: 600;
-                    color: #555;
-                }
-                .add-form input {
-                    width: 100%;
-                    padding: 10px;
-                    margin-top: 5px;
-                    border: 1px solid #ddd;
-                    border-radius: 5px;
-                    box-sizing: border-box;
-                    font-size: 1em;
-                }
-                .add-form button {
-                    width: 100%;
-                    padding: 12px;
-                    background-color: #f39c12; 
-                    color: white;
-                    border: none;
-                    border-radius: 8px;
-                    font-size: 1.1em;
-                    cursor: pointer;
-                    transition: background-color 0.3s;
-                    margin-top: 20px;
-                }
-                .add-form button:hover:not(:disabled) {
-                    background-color: #e67e22;
-                }
-                .message {
-                    margin-top: 20px;
-                    padding: 15px;
-                    border-radius: 8px;
-                    font-weight: 600;
-                }
-                .message.success {
-                    background-color: #d4edda;
-                    color: #155724;
-                    border: 1px solid #c3e6cb;
-                }
-                .message.error {
-                    background-color: #f8d7da;
-                    color: #721c24;
-                    border: 1px solid #f5c6cb;
-                }
+                .page-title { color: #2c3e50; border-bottom: 2px solid #f39c12; padding-bottom: 10px; margin-bottom: 20px; }
+                .hive-form { max-width: 500px; margin-top: 30px; padding: 20px; border: 1px solid #ccc; border-radius: 8px; }
+                .form-group { margin-bottom: 15px; }
+                label { display: block; margin-bottom: 5px; font-weight: bold; color: #333; }
+                input { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px; box-sizing: border-box; }
+                .submit-button { background-color: #f39c12; color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; font-size: 1em; margin-top: 20px; transition: background-color 0.2s; }
+                .submit-button:hover:not(:disabled) { background-color: #e67e22; }
+                .submit-button:disabled { background-color: #ccc; cursor: not-allowed; }
+                .error-message { color: #c0392b; background-color: #fdd; padding: 10px; border-radius: 4px; }
+                .success-message { color: #27ae60; background-color: #d8f5e7; padding: 10px; border-radius: 4px; }
             `}</style>
-        </div>
+        </AdminLayout>
     );
 }
