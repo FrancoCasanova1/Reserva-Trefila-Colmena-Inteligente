@@ -54,10 +54,11 @@ export default function AdminHivesPage() {
 
         try {
             const { data, error: fetchError } = await supabase
-                .from('hives')
-                .select('*')
-                .eq('user_id', user.id) 
-                .order('created_at', { ascending: false }); 
+            .from('hives')
+            .select('*')
+            // 🚨 Asegúrate de que SOLO está el filtro por user_id.
+            .eq('user_id', user.id) 
+            .order('created_at', { ascending: false });
 
             if (fetchError) {
                  console.error("LOG: ERROR en Supabase:", fetchError); 
