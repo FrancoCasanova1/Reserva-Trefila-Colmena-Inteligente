@@ -21,12 +21,22 @@ export default function AddHivePage() {
     const [error, setError] = useState(null);
     const [success, setSuccess] = useState(false);
 
-    // Si el usuario no está disponible, redirigimos. (Idealmente manejado por getServerSideProps)
-    if (!user) {
-        router.push('/login');
-        return null; 
-    }
+    useEffect(() => {
+        // Si no está cargando y no hay usuario, redirigir
+        if (!isAuthLoading && !user) {
+            router.push('/login');
+        }
+    }, [isAuthLoading, user, router]);
 
+    // Durante la carga o si no hay usuario (antes de la redirección), mostramos algo temporal
+    if (isAuthLoading || !user) {
+        return (
+            <AdminLayout>
+                <div className="status-message">Verificando sesión...</div>
+            </AdminLayout>
+        );
+    }
+    
     const handleSubmit = async (e) => {
         e.preventDefault();
         
