@@ -1,32 +1,28 @@
+// /frontend/pages/_app.js
+import '../styles/globals.css';
+import { createBrowserSupabaseClient } from '@supabase/auth-helpers-nextjs';
+import { SessionContextProvider } from '@supabase/auth-helpers-react';
 import { useState } from 'react';
-import { SessionContextProvider, createPagesBrowserClient } from '@supabase/auth-helpers-nextjs'; 
-import Head from 'next/head';
-
-// Asegúrate de que los estilos globales se importen correctamente
-import '../styles/globals.css'; 
 
 function MyApp({ Component, pageProps }) {
-    
-    // Inicializar el cliente, pasando la sesión inicial a la función de creación del cliente
-    // Esto es una práctica más robusta para asegurar que el cliente sepa si está
-    // en una sesión activa, lo cual puede prevenir errores de contexto durante el prerendering.
-    const [supabaseClient] = useState(() => 
-        createPagesBrowserClient({
-            initialSession: pageProps.initialSession,
-        })
-    );
+  // 1. Inicializa el cliente Supabase
+  const [supabaseClient] = useState(() =>
+    createBrowserSupabaseClient({
+      // Las variables de entorno son inyectadas por Next.js
+      supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_URL,
+      supabaseKey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+    })
+  );
 
-    return (
-        <SessionContextProvider
-            supabaseClient={supabaseClient}
-            initialSession={pageProps.initialSession} // Se sigue pasando para el contexto de React
-        >
-            <Head>
-                <link rel="icon" href="/favicon.ico" />
-            </Head>
-            <Component {...pageProps} />
-        </SessionContextProvider>
-    );
+  return (
+    // 2. Envuelve la aplicación con el contexto de sesión
+    <SessionContextProvider
+      supabaseClient={supabaseClient}
+      initialSession={pageProps.initialSession}
+    >
+      <Component {...pageProps} />
+    </SessionContextProvider>
+  );
 }
 
 export default MyApp;
