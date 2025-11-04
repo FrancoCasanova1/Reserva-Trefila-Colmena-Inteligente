@@ -119,8 +119,6 @@ export default function Home() {
     const [hives, setHives] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
-    
-    // NOTA: La lógica de clima (estado y useEffect) fue movida a WeatherBar.jsx
 
     useEffect(() => {
         fetchHives();
