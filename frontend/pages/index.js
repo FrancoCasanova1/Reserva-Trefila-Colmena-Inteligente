@@ -28,7 +28,6 @@ function WeatherBar({ weather }) {
             {iconUrl && <img src={iconUrl} alt={description} className="weather-icon" />}
             <span className="location-name">Clima en **{name}**:</span>
             <span className="temp">
-                {/* CRÍTICO: Usar el encadenamiento opcional y verificar el valor */}
                 {main?.temp ? `${main.temp.toFixed(1)}°C` : 'N/A'}
             </span>
             <span className="details"> 
