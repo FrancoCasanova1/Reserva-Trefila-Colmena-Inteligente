@@ -118,7 +118,7 @@ export default function AdminHivesPage() {
 
             <h1 className="page-title">Administración de Colmenas ({hives.length})</h1>
             
-            <button className="add-button" onClick={() => router.push('/admin/hives/new')}>
+            <button className="add-button" onClick={() => router.push('/admin/add-hive')}>
                 + Añadir Nueva Colmena
             </button>
 
