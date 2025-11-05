@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'; // 🚨 Ambos hooks de React import
 import { useRouter } from 'next/router';
 import Head from 'next/head';
 import { useUser, useSupabaseClient } from '@supabase/auth-helpers-react';
+import { createPagesServerClient } from '@supabase/auth-helpers-nextjs';
 
 import AdminLayout from '../../components/Layout/AdminLayout'; // Ajusta la extensión o ruta si es necesario
 
@@ -23,13 +24,14 @@ export default function AddHivePage() {
 
     // 🚨 LÓGICA DE REDIRECCIÓN EN CLIENTE (useEffect)
     // Esto previene el error "No router instance found" durante el build/SSR.
-    useEffect(() => {
+
+    /*useEffect(() => {
         // Si la carga de autenticación terminó y no hay usuario, redirigir.
         if (!isAuthLoading && !user) {
             router.push('/login');
         }
     }, [isAuthLoading, user, router]);
-
+    */
 
     const handleSubmit = async (e) => {
         e.preventDefault();
@@ -76,15 +78,20 @@ export default function AddHivePage() {
     };
 
     // 🚨 Manejo del estado de carga y usuario
-    if (isAuthLoading || !user) {
+    if (isAuthLoading) {
         return (
             <AdminLayout>
                 <div className="status-message">Verificando sesión...</div>
-                <style jsx>{`
-                    .status-message { text-align: center; padding: 20px; font-size: 1.2em; color: #2c3e50; }
-                `}</style>
             </AdminLayout>
         );
+    }
+    
+    // 🔑 CLAVE: Si ya terminó de cargar (isAuthLoading=false) y por alguna razón
+    // el usuario sigue siendo null/undefined (lo cual no debería pasar con SSR),
+    // asumimos un fallo y lo redirigimos al login (o al dashboard para refrescar).
+    if (!user) {
+        router.push('/login'); 
+        return null; // Detenemos el renderizado
     }
     
     // Renderizado del formulario
@@ -148,3 +155,38 @@ export default function AddHivePage() {
         </AdminLayout>
     );
 }
+
+// ----------------------------------------------------------------------
+// SSR PARA PROTECCIÓN DE RUTA
+// ----------------------------------------------------------------------
+
+/**
+ * Función que se ejecuta en el servidor para verificar la sesión antes de renderizar la página.
+ */
+export const getServerSideProps = async (ctx) => {
+  // 1. Crea el cliente Supabase del lado del servidor
+  const supabase = createPagesServerClient(ctx);
+  
+  // 2. Obtiene la sesión del usuario
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+
+  // 3. Redirige si no hay sesión
+  if (!session) {
+    return {
+      redirect: {
+        destination: '/login', // 🚨 Redirige al login si no está autenticado
+        permanent: false,
+      },
+    };
+  }
+
+  // 4. Si la sesión existe, pasa la sesión como initialSession
+  return {
+    props: {
+      // CRUCIAL: Esto inicializa el SessionContextProvider en el cliente
+      initialSession: session, 
+    },
+  };
+};
