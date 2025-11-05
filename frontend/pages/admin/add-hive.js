@@ -1,18 +1,18 @@
 // /frontend/pages/admin/add-hive.js
 
-import { useState, useEffect } from 'react'; // 🚨 Ambos hooks de React importados
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import Head from 'next/head';
 import { useUser, useSupabaseClient } from '@supabase/auth-helpers-react';
-import { createPagesServerClient } from '@supabase/auth-helpers-nextjs';
+import { createPagesServerClient } from '@supabase/auth-helpers-nextjs'; // Para SSR
 
-import AdminLayout from '../../components/Layout/AdminLayout.jsx'; 
+import AdminLayout from '../../components/Layout/AdminLayout'; // 🚨 VERIFICA esta ruta: si está en /frontend/pages/admin, '../../' es correcto
 
 export default function AddHivePage() {
     const supabase = useSupabaseClient();
     const router = useRouter();
     
-    // 🚨 CORRECCIÓN: Desestructurar 'user' y renombrar 'isLoading' a 'isAuthLoading'
+    // Obtener usuario y estado de carga
     const { user, isLoading: isAuthLoading } = useUser() || {}; 
 
     // Estados del formulario
@@ -22,7 +22,15 @@ export default function AddHivePage() {
     const [error, setError] = useState(null);
     const [success, setSuccess] = useState(false);
 
-   
+    // 🔑 LÓGICA CLAVE: Redirección de respaldo para el CLIENTE
+    // Esto previene el error 'No router instance found' en el servidor al mover router.push() aquí.
+    useEffect(() => {
+        // Solo redirigir si la autenticación ha terminado de cargar Y no hay usuario.
+        if (!isAuthLoading && !user) {
+            router.push('/login');
+        }
+    }, [isAuthLoading, user, router]);
+
 
     const handleSubmit = async (e) => {
         e.preventDefault();
@@ -39,7 +47,7 @@ export default function AddHivePage() {
         try {
             const newHive = {
                 // CLAVE: Asignar el ID del usuario actual
-                user_id: user.id, 
+                user_id: user.id, // Esto solo se ejecuta si el usuario existe, gracias a las comprobaciones
                 name: name.trim(),
                 location: location.trim(),
             };
@@ -68,7 +76,7 @@ export default function AddHivePage() {
         }
     };
 
-    // 🚨 Manejo del estado de carga y usuario
+    // 🚨 Manejo del estado de carga (Primer filtro)
     if (isAuthLoading) {
         return (
             <AdminLayout>
@@ -77,15 +85,13 @@ export default function AddHivePage() {
         );
     }
     
-    // 🔑 CLAVE: Si ya terminó de cargar (isAuthLoading=false) y por alguna razón
-    // el usuario sigue siendo null/undefined (lo cual no debería pasar con SSR),
-    // asumimos un fallo y lo redirigimos al login (o al dashboard para refrescar).
+    // 🔑 Filtro de respaldo para usuario nulo (segundo filtro)
+    // El useEffect se encargará de la redirección, pero devolvemos null para no renderizar el formulario incompleto.
     if (!user) {
-        router.push('/login'); 
-        return null; // Detenemos el renderizado
+        return null;
     }
     
-    // Renderizado del formulario
+    // Renderizado del formulario (el user está garantizado)
     return (
         <AdminLayout>
             <Head>
@@ -151,9 +157,6 @@ export default function AddHivePage() {
 // SSR PARA PROTECCIÓN DE RUTA
 // ----------------------------------------------------------------------
 
-/**
- * Función que se ejecuta en el servidor para verificar la sesión antes de renderizar la página.
- */
 export const getServerSideProps = async (ctx) => {
   // 1. Crea el cliente Supabase del lado del servidor
   const supabase = createPagesServerClient(ctx);
@@ -167,7 +170,7 @@ export const getServerSideProps = async (ctx) => {
   if (!session) {
     return {
       redirect: {
-        destination: '/login', // 🚨 Redirige al login si no está autenticado
+        destination: '/login', // Redirige al login si no está autenticado
         permanent: false,
       },
     };
