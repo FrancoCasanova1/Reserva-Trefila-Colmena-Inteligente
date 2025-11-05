@@ -21,8 +21,16 @@ export default function AdminHivesPage() {
     const supabase = useSupabaseClient();
     const router = useRouter();
 
+    const { user, isLoading: isAuthLoading } = useUser() || {}
+    
+    if (isAuthLoading) {
+        return (
+            <AdminLayout>
+                <div className="status-message">Verificando sesión...</div>
+            </AdminLayout>
+        );
+    }
     // El hook useUser ya tiene la sesión gracias a initialSession inyectada por SSR.
-    const { user } = useUser() || {}; 
 
     if (user) {
         console.log("LOG: User ID Autenticado (CORRECTO):", user.id); 
