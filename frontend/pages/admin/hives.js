@@ -1,190 +1,93 @@
-import { useState, useEffect, useCallback } from 'react';
-import { useRouter } from 'next/router';
 import Head from 'next/head';
-
-// Importamos hooks de cliente
-import { useUser, useSupabaseClient } from '@supabase/auth-helpers-react';
-
-// Importamos helpers de servidor para SSR
+import { useRouter } from 'next/router';
+import { useUser } from '@supabase/auth-helpers-react';
 import { createPagesServerClient } from '@supabase/auth-helpers-nextjs';
 
-// Importaciones de Componentes
-import HiveAdminCard from '../../components/Admin/HiveAdminCard.jsx'; 
-import AdminLayout from '../../components/Layout/AdminLayout.jsx'; 
+import AdminLayout from '../../components/Layout/AdminLayout';
 
-
-// ----------------------------------------------------------------------
-// COMPONENTE PRINCIPAL (CLIENTE)
-// ----------------------------------------------------------------------
-
-export default function AdminHivesPage() {
-    const supabase = useSupabaseClient();
+export default function AdminHivesPage({ hivesData, error }) {
+    // 🚨 El user ya existe gracias a SSR, pero lo mantenemos por seguridad
+    const { user, isLoading: isAuthLoading } = useUser() || {};
     const router = useRouter();
 
-    const { user, isLoading: isAuthLoading } = useUser() || {}
-    
+    // Filtro de carga (solo se activa si la sesión aún se está inyectando)
     if (isAuthLoading) {
-        return (
-            <AdminLayout>
-                <div className="status-message">Verificando sesión...</div>
-            </AdminLayout>
-        );
-    }
-    // El hook useUser ya tiene la sesión gracias a initialSession inyectada por SSR.
-
-    if (user) {
-        console.log("LOG: User ID Autenticado (CORRECTO):", user.id); 
-    } else {
-        console.log("LOG: User ID Autenticado (Transitorio): undefined"); 
-    }
-
-    if (user && user.id) {
-        console.log("LOG: User ID Autenticado (FINAL):", user.id); 
-    } else {
-        console.log("LOG: User ID Autenticado (Esperando...):", user); 
-    }
-
-    // Estados
-    const [hives, setHives] = useState([]);
-    // 🚨 CORRECCIÓN CLAVE: Inicializamos loading en FALSE. Solo se activa al iniciar el fetch.
-    const [loading, setLoading] = useState(false); 
-    const [error, setError] = useState(null);
-
-    // Usamos useCallback para estabilizar la función de fetch
-    const fetchHives = useCallback(async () => {
-        // En este punto, sabemos que 'user' existe gracias a getServerSideProps
-        if (!user) return; 
-        
-        // 🚨 Se activa loading JUSTO antes de la llamada de red
-        setLoading(true); 
-        setError(null);
-        console.log("LOG: 1. fetchHives INICIADO. Usuario ID:", user.id); 
-
-        try {
-            const { data, error: fetchError } = await supabase
-            .from('hives')
-            .select('*')
-            // 🚨 Asegúrate de que SOLO está el filtro por user_id.
-            .eq('user_id', user.id) 
-            .order('created_at', { ascending: false });
-
-            if (fetchError) {
-                 console.error("LOG: ERROR en Supabase:", fetchError); 
-                 throw fetchError;
-            }
-            
-            setHives(data);
-            console.log(`LOG: 2. Datos cargados: ${data.length}`);
-
-        } catch (e) {
-            console.error("LOG: 3. Error Capturado en fetchHives:", e); 
-            setError(`Fallo al cargar datos. Revise la política RLS. (Error: ${e.message || 'Desconocido'}).`);
-        } finally {
-            // 🚨 Se desactiva loading SIEMPRE al final de la ejecución
-            setLoading(false); 
-            console.log("LOG: 4. fetchHives FINALIZADO.");
-        }
-    }, [supabase, user]); 
-
-    // --- LÓGICA DE CARGA DE DATOS ---
-    useEffect(() => {
-        // 🚨 CORRECCIÓN CLAVE: Si hay un usuario, iniciamos el fetch de datos.
-        // Esto elimina el chequeo complejo de isAuthLoading.
-        if (user) {
-            console.log("LOG: Usuario disponible. Iniciando fetchHives en useEffect.");
-            fetchHives();
-        }
-    // Añadimos solo user y fetchHives como dependencia
-    }, [user, fetchHives]); 
-
-    // --- RENDERIZADO CONDICIONAL ---
-    
-    if (loading) {
-        return (
-            <AdminLayout>
-                <div className="status-message">Cargando colmenas...</div>
-            </AdminLayout>
-        );
+        return <AdminLayout><p>Verificando sesión...</p></AdminLayout>;
     }
     
+    // Si hay un error de fetching (ej: fallo de RLS o de DB)
     if (error) {
-        return (
-            <AdminLayout>
-                <div className="error-message">
-                    Error al cargar: {error}
-                </div>
-            </AdminLayout>
-        );
+        return <AdminLayout><p className="error-message">Error al cargar colmenas: {error}</p></AdminLayout>;
     }
 
-    // Renderizado principal
+    // Redirección si el usuario desaparece después de la carga inicial
+    if (!user) {
+        router.push('/login');
+        return null; 
+    }
+
     return (
         <AdminLayout>
-            <Head>
-                <title>Colmenas | Panel de Administración</title>
-            </Head>
+            <Head><title>Mis Colmenas | Admin</title></Head>
 
-            <h1 className="page-title">Administración de Colmenas ({hives.length})</h1>
-            
-            <button className="add-button" onClick={() => router.push('/admin/add-hive')}>
-                + Añadir Nueva Colmena
-            </button>
+            <div className="hive-header">
+                <h1 className="page-title">Mis Colmenas 🐝</h1>
+                <button 
+                    onClick={() => router.push('/admin/add-hive')} 
+                    className="add-hive-button"
+                >
+                    + Añadir Nueva Colmena
+                </button>
+            </div>
 
-            {hives.length === 0 ? (
-                <p className="status-message no-hives">No se encontraron colmenas. ¡Añade una!</p>
+            {hivesData.length === 0 ? (
+                <p>Aún no tienes colmenas. ¡Crea la primera!</p>
             ) : (
-                <div className="hives-grid">
-                    {hives.map(hive => (
-                        <HiveAdminCard 
-                            key={hive.hive_unique_id}
-                            hive={hive} 
-                            onDeleteSuccess={fetchHives} 
-                        />
+                <div className="hive-list">
+                    {hivesData.map(hive => (
+                        <div key={hive.id} className="hive-card">
+                            <h2>{hive.name}</h2>
+                            <p>Ubicación: {hive.location}</p>
+                            {/* Mostrar datos sensibles como user_id solo por debugging */}
+                            {/* <small>ID: {hive.user_id}</small> */} 
+                        </div>
                     ))}
                 </div>
             )}
-            <style jsx>{`
-                /* Estilos ... */
-                .status-message { text-align: center; padding: 20px; font-size: 1.2em; color: #2c3e50; }
-                .error-message { text-align: center; padding: 20px; background-color: #fdd; color: #c0392b; border-radius: 8px; font-weight: bold; }
-                .no-hives { border: 1px dashed #f39c12; background-color: #fff9e6; border-radius: 8px; }
-                /* ... otros estilos */
-            `}</style>
         </AdminLayout>
     );
 }
 
 // ----------------------------------------------------------------------
-// SSR PARA PROTECCIÓN DE RUTA Y CARGA INICIAL DE SESIÓN (SERVIDOR)
+// SSR: Protección y Fetching
 // ----------------------------------------------------------------------
 
-/**
- * Función que se ejecuta en el servidor para verificar la sesión antes de renderizar la página.
- */
 export const getServerSideProps = async (ctx) => {
-  // 1. Crea el cliente Supabase del lado del servidor
-  const supabase = createPagesServerClient(ctx);
-  
-  // 2. Obtiene la sesión del usuario
-  const {
-    data: { session },
-  } = await supabase.auth.getSession();
+    const supabase = createPagesServerClient(ctx);
+    
+    // 1. Verificar Sesión
+    const { data: { session } } = await supabase.auth.getSession();
 
-  // 3. Redirige si no hay sesión
-  if (!session) {
+    if (!session) {
+        return {
+            redirect: {
+                destination: '/login', // Redirección inmediata del lado del servidor
+                permanent: false,
+            },
+        };
+    }
+
+    // 2. Fetch de Datos (RLS se aplica automáticamente aquí)
+    const { data: hivesData, error } = await supabase
+        .from('hives')
+        .select('id, name, location, user_id'); // Seleccionar campos necesarios
+        
+    // 3. Devolver Props
     return {
-      redirect: {
-        destination: '/login', // Asegúrate de que esta es la ruta de login
-        permanent: false,
-      },
+        props: {
+            initialSession: session, // CRUCIAL para cargar la sesión en el cliente
+            hivesData: hivesData || [],
+            error: error ? error.message : null,
+        },
     };
-  }
-
-  // 4. Si la sesión existe, pasa la sesión como initialSession
-  return {
-    props: {
-      // CRUCIAL: Esto inicializa el SessionContextProvider en el cliente
-      initialSession: session, 
-    },
-  };
 };

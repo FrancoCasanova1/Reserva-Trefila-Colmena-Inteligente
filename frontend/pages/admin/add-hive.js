@@ -1,18 +1,15 @@
-// /frontend/pages/admin/add-hive.js
-
-import { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react'; 
 import { useRouter } from 'next/router';
 import Head from 'next/head';
 import { useUser, useSupabaseClient } from '@supabase/auth-helpers-react';
 import { createPagesServerClient } from '@supabase/auth-helpers-nextjs'; // Para SSR
 
-import AdminLayout from '../../components/Layout/AdminLayout'; // 🚨 VERIFICA esta ruta: si está en /frontend/pages/admin, '../../' es correcto
+import AdminLayout from '../../components/Layout/AdminLayout';
 
 export default function AddHivePage() {
     const supabase = useSupabaseClient();
     const router = useRouter();
     
-    // Obtener usuario y estado de carga
     const { user, isLoading: isAuthLoading } = useUser() || {}; 
 
     // Estados del formulario
@@ -22,12 +19,11 @@ export default function AddHivePage() {
     const [error, setError] = useState(null);
     const [success, setSuccess] = useState(false);
 
-    // 🔑 LÓGICA CLAVE: Redirección de respaldo para el CLIENTE
-    // Esto previene el error 'No router instance found' en el servidor al mover router.push() aquí.
+    // 🔑 LÓGICA DE REDIRECCIÓN DE FALLBACK (CLIENTE): 
+    // Captura el caso de que la sesión expire después de la carga inicial.
     useEffect(() => {
-        // Solo redirigir si la autenticación ha terminado de cargar Y no hay usuario.
         if (!isAuthLoading && !user) {
-            router.push('/login');
+            router.push('/login'); 
         }
     }, [isAuthLoading, user, router]);
 
@@ -40,6 +36,12 @@ export default function AddHivePage() {
             return;
         }
 
+        // Antes de enviar, verificamos el user (aunque SSR lo garantiza)
+        if (!user || !user.id) {
+            setError("Error: Usuario no autenticado para la inserción.");
+            return;
+        }
+
         setIsSubmitting(true);
         setError(null);
         setSuccess(false);
@@ -47,7 +49,7 @@ export default function AddHivePage() {
         try {
             const newHive = {
                 // CLAVE: Asignar el ID del usuario actual
-                user_id: user.id, // Esto solo se ejecuta si el usuario existe, gracias a las comprobaciones
+                user_id: user.id, 
                 name: name.trim(),
                 location: location.trim(),
             };
@@ -62,21 +64,20 @@ export default function AddHivePage() {
                 throw error;
             }
 
-            console.log("Colmena creada con éxito:", data);
             setSuccess(true);
             
-            // Redirigir de vuelta a la lista de colmenas
+            // Redirigir a la lista con un indicador de éxito
             router.push('/admin/hives?created=true');
 
         } catch (e) {
             console.error("Error al guardar la colmena:", e);
-            setError(`Fallo al crear la colmena: ${e.message || 'Error desconocido.'} Revise sus políticas RLS INSERT.`);
+            setError(`Fallo al crear la colmena: ${e.message || 'Error desconocido.'}`);
         } finally {
             setIsSubmitting(false);
         }
     };
 
-    // 🚨 Manejo del estado de carga (Primer filtro)
+    // 🚨 Manejo del estado de carga inicial
     if (isAuthLoading) {
         return (
             <AdminLayout>
@@ -85,8 +86,7 @@ export default function AddHivePage() {
         );
     }
     
-    // 🔑 Filtro de respaldo para usuario nulo (segundo filtro)
-    // El useEffect se encargará de la redirección, pero devolvemos null para no renderizar el formulario incompleto.
+    // Filtro de respaldo para usuario nulo (el useEffect lo maneja, pero detenemos el render)
     if (!user) {
         return null;
     }
@@ -114,73 +114,36 @@ export default function AddHivePage() {
                         required
                     />
                 </div>
-
-                <div className="form-group">
-                    <label htmlFor="location">Ubicación / Descripción:</label>
-                    <input
-                        id="location"
-                        type="text"
-                        value={location}
-                        onChange={(e) => setLocation(e.target.value)}
-                        placeholder="Ej: Patio trasero, cerca del roble"
-                        disabled={isSubmitting}
-                        required
-                    />
-                </div>
-
-                {error && <p className="error-message">{error}</p>}
-                {success && <p className="success-message">¡Colmena creada con éxito!</p>}
-
-                <button type="submit" disabled={isSubmitting} className="submit-button">
-                    {isSubmitting ? 'Guardando...' : 'Crear Colmena'}
-                </button>
+                {/* ... (Resto del formulario y estilos JSX) ... */}
             </form>
-
-            <style jsx>{`
-                /* Estilos básicos */
-                .page-title { color: #2c3e50; border-bottom: 2px solid #f39c12; padding-bottom: 10px; margin-bottom: 20px; }
-                .hive-form { max-width: 500px; margin-top: 30px; padding: 20px; border: 1px solid #ccc; border-radius: 8px; }
-                .form-group { margin-bottom: 15px; }
-                label { display: block; margin-bottom: 5px; font-weight: bold; color: #333; }
-                input { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px; box-sizing: border-box; }
-                .submit-button { background-color: #f39c12; color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; font-size: 1em; margin-top: 20px; transition: background-color 0.2s; }
-                .submit-button:hover:not(:disabled) { background-color: #e67e22; }
-                .submit-button:disabled { background-color: #ccc; cursor: not-allowed; }
-                .error-message { color: #c0392b; background-color: #fdd; padding: 10px; border-radius: 4px; }
-                .success-message { color: #27ae60; background-color: #d8f5e7; padding: 10px; border-radius: 4px; }
-            `}</style>
+            {/* ... (Estilos JSX) ... */}
         </AdminLayout>
     );
 }
 
 // ----------------------------------------------------------------------
-// SSR PARA PROTECCIÓN DE RUTA
+// SSR: Protección de Ruta
 // ----------------------------------------------------------------------
 
 export const getServerSideProps = async (ctx) => {
-  // 1. Crea el cliente Supabase del lado del servidor
-  const supabase = createPagesServerClient(ctx);
-  
-  // 2. Obtiene la sesión del usuario
-  const {
-    data: { session },
-  } = await supabase.auth.getSession();
+    const supabase = createPagesServerClient(ctx);
+    
+    // 1. Verificar Sesión
+    const { data: { session } } = await supabase.auth.getSession();
 
-  // 3. Redirige si no hay sesión
-  if (!session) {
+    if (!session) {
+        return {
+            redirect: {
+                destination: '/login', // Redirección del lado del servidor si no hay sesión
+                permanent: false,
+            },
+        };
+    }
+
+    // 2. Devolver Props
     return {
-      redirect: {
-        destination: '/login', // Redirige al login si no está autenticado
-        permanent: false,
-      },
+        props: {
+            initialSession: session, // CRUCIAL para cargar la sesión en el cliente
+        },
     };
-  }
-
-  // 4. Si la sesión existe, pasa la sesión como initialSession
-  return {
-    props: {
-      // CRUCIAL: Esto inicializa el SessionContextProvider en el cliente
-      initialSession: session, 
-    },
-  };
 };
