@@ -1,41 +1,25 @@
-// /frontend/pages/login.js
+// /pages/_app.js
 
-import { Auth } from '@supabase/auth-ui-react';
-import { useSupabaseClient } from '@supabase/auth-helpers-react';
-import { useRouter } from 'next/router';
-import Head from 'next/head';
+import { createBrowserSupabaseClient } from '@supabase/auth-helpers-nextjs';
+import { SessionContextProvider } from '@supabase/auth-helpers-react';
+import { useState } from 'react';
 
-export default function Login() {
-    const supabase = useSupabaseClient();
-    const router = useRouter();
+export default function MyApp({ Component, pageProps }) {
+  // Asegúrate de que el cliente se inicialice correctamente aquí
+  const [supabaseClient] = useState(() => 
+    createBrowserSupabaseClient({
+      supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_URL,
+      supabaseKey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+    })
+  );
 
-    if (!supabase) {
-        // Esto indica un fallo en la conexión del cliente
-        return <p>Error: No se pudo inicializar el cliente de Supabase.</p>;
-    }
-    
-    // Si la sesión es exitosa, redirigir al dashboard
-    const handleLogin = (event) => {
-        if (event.event === 'SIGNED_IN') {
-            router.push('/admin/hives');
-        }
-    };
-
-    return (
-        <div className="login-container">
-            <Head><title>Login</title></Head>
-            <h1>Acceso de Administrador</h1>
-            <Auth 
-                supabaseClient={supabase} 
-                appearance={{ theme: "minimal" }} 
-                // CRÍTICO: Asegúrate de que solo permites 'email'
-                providers={['email']} 
-                // Añade la función para manejar la redirección
-                onAuthStateChange={handleLogin}
-            />
-        </div>
-    );
+  return (
+    <SessionContextProvider
+      supabaseClient={supabaseClient} // Propiedad CORRECTA
+      initialSession={pageProps.initialSession} // Propiedad CORRECTA
+    >
+      <Component {...pageProps} />
+    </SessionContextProvider>
+    // 🚨 Verifica que NO se pase 'onAuthStateChange' aquí
+  );
 }
-
-// Nota: Si usas getServerSideProps en otras páginas, asegúrate de que /login NO LO USE.
-// La página de login debe ser estática o Client-Side Rendered (CSR).
