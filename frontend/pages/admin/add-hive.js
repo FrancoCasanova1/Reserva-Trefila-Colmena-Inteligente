@@ -6,7 +6,7 @@ import Head from 'next/head';
 import { useUser, useSupabaseClient } from '@supabase/auth-helpers-react';
 import { createPagesServerClient } from '@supabase/auth-helpers-nextjs';
 
-import AdminLayout from '../../components/Layout/AdminLayout'; // Ajusta la extensión o ruta si es necesario
+import AdminLayout from '../../components/Layout/AdminLayout.jsx'; 
 
 export default function AddHivePage() {
     const supabase = useSupabaseClient();
@@ -22,16 +22,7 @@ export default function AddHivePage() {
     const [error, setError] = useState(null);
     const [success, setSuccess] = useState(false);
 
-    // 🚨 LÓGICA DE REDIRECCIÓN EN CLIENTE (useEffect)
-    // Esto previene el error "No router instance found" durante el build/SSR.
-
-    /*useEffect(() => {
-        // Si la carga de autenticación terminó y no hay usuario, redirigir.
-        if (!isAuthLoading && !user) {
-            router.push('/login');
-        }
-    }, [isAuthLoading, user, router]);
-    */
+   
 
     const handleSubmit = async (e) => {
         e.preventDefault();
